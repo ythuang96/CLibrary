@@ -176,8 +176,8 @@ int tcp_server_monitor( void ) {
         buffer[valread] = '\0';
         printf("Message from client is: %s\n", buffer);
 
-
-        /* send(sd , buffer , strlen(buffer) , 0 ); */
+        nsleep(1000000000);
+        send(sd , "Hello from server!" , 18 , 0 );
       }
     }
   }
