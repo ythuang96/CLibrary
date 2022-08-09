@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"clibrary.h": "c",
+			"clib_tcp.h": "c",
+			"clibaraysetting.h": "c"
+		}
+	}
+}
