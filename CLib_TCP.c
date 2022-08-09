@@ -53,13 +53,16 @@ int tcp_server_setup( void ) {
 /*
  * Montior TCP comm from the server side, run this continuously in a loop
  * Arguments:
- *   None
- *   Global variables master_socket_ and client_socket_
+ *   master_socket: [int, Input]
+ *                  file ID for master socket
+ *   client_socket: [int, size MAXCLIENTS, Input/Output]
+ *                  array of file IDs for the client socket, gets updated by
+ *                  this function if new clients connects to the server
  * Return:
  *    0: on success
  *   -1: on failure
  */
-int tcp_server_monitor( void ) {
+int tcp_server_monitor( int master_socket, int client_socket[MAXCLIENTS] ) {
   int i;
   /* message length */
   int valread;
@@ -87,13 +90,13 @@ int tcp_server_monitor( void ) {
 
   /************************** Build the socket set ****************************/
   FD_ZERO(&readfds);                /* clear the socket set               */
-  FD_SET(master_socket_, &readfds); /* add master socket to set           */
-  max_sd = master_socket_;          /* set highest file descriptor number */
+  FD_SET(master_socket, &readfds); /* add master socket to set           */
+  max_sd = master_socket;          /* set highest file descriptor number */
                                     /* need it for the select function    */
 
   /* Add each client sockets to set */
   for ( i = 0 ; i < MAXCLIENTS ; i++) {
-    sd = client_socket_[i];
+    sd = client_socket[i];
     /* If valid socket descriptor, then add to read list */
     if(sd > 0) FD_SET( sd , &readfds);
     /* Set highest file descriptor number */
@@ -111,9 +114,9 @@ int tcp_server_monitor( void ) {
   /* return if select timed out */
   if (activity == 0) return 0;
 
-  /* Whenever a new client connects, master_socket_ will be activated and a new
+  /* Whenever a new client connects, master_socket will be activated and a new
    * fd will be open for that client. We will store its fd in the array
-   * client_socket_ and in the next iteration we will add it to the readfds to
+   * client_socket and in the next iteration we will add it to the readfds to
    * monitor for activity from this client.
    * Similarly, if an old client sends some data, readfds will be activated and
    * we will check from the list of existing client to see which client has
@@ -122,10 +125,10 @@ int tcp_server_monitor( void ) {
 
   /***************************** New Connection *******************************/
   /* If something happened on the master socket, then its an new connection.
-   * Check with FD_ISSET if master_socket_ is in the active list */
-  if (FD_ISSET(master_socket_, &readfds)) {
+   * Check with FD_ISSET if master_socket is in the active list */
+  if (FD_ISSET(master_socket, &readfds)) {
     /* accept new connection */
-    new_socket = accept( master_socket_, (struct sockaddr *)&address, \
+    new_socket = accept( master_socket, (struct sockaddr *)&address, \
       (socklen_t*)&addrlen );
 
     if ( new_socket < 0 ) return -1;
@@ -138,8 +141,8 @@ int tcp_server_monitor( void ) {
     /* Add new socket to array of sockets */
     for (i = 0; i < MAXCLIENTS; i++) {
       /* if position is empty */
-      if( client_socket_[i] == 0 ) {
-        client_socket_[i] = new_socket;
+      if( client_socket[i] == 0 ) {
+        client_socket[i] = new_socket;
         break;
       }
     }
@@ -150,7 +153,7 @@ int tcp_server_monitor( void ) {
   /* else its some IO operation on some other socket */
   /* loop over all client sockets */
   for (i = 0; i < MAXCLIENTS; i++) {
-    sd = client_socket_[i];
+    sd = client_socket[i];
 
     /* Check if this clinet is active */
     if (FD_ISSET( sd , &readfds)) {
@@ -167,7 +170,7 @@ int tcp_server_monitor( void ) {
 
         /* Close the socket, and remove from client list */
         close( sd );
-        client_socket_[i] = 0;
+        client_socket[i] = 0;
       }
 
       /* Else, a message is sent from the clinet */

@@ -15,6 +15,3 @@ FILE *error_log_;
 
 /* Code running state */
 state_e state_;
-
-/* TCP Communication */
-int master_socket_, client_socket_[MAXCLIENTS];

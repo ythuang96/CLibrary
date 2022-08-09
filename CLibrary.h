@@ -58,7 +58,7 @@ void SigHandler(int dummy);
 
 /********************************* CLib_TCP.c *********************************/
 int tcp_server_setup( void );
-int tcp_server_monitor( void );
+int tcp_server_monitor( int master_socket, int client_socket[MAXCLIENTS] );
 
 
 #endif
