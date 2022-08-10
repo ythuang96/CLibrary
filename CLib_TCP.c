@@ -90,8 +90,8 @@ int tcp_server_monitor( int master_socket, int client_socket[MAXCLIENTS] ) {
 
   /************************** Build the socket set ****************************/
   FD_ZERO(&readfds);                /* clear the socket set               */
-  FD_SET(master_socket, &readfds); /* add master socket to set           */
-  max_sd = master_socket;          /* set highest file descriptor number */
+  FD_SET(master_socket, &readfds);  /* add master socket to set           */
+  max_sd = master_socket;           /* set highest file descriptor number */
                                     /* need it for the select function    */
 
   /* Add each client sockets to set */
@@ -105,8 +105,8 @@ int tcp_server_monitor( int master_socket, int client_socket[MAXCLIENTS] ) {
 
 
   /**************************** Monitor Activity ******************************/
-  /* Wait for an activity on one of the sockets, timeout is NULL ,
-   * so wait indefinitely
+  /* Wait for an activity on one of the sockets, timeout is tv ,
+   * set to update at TCPUPDATEFREQ
    * After select() has returned, readfds will be cleared of all file
    * descriptors except for those that are ready for reading.
    * We will need to rebuild readfds on next loop. */

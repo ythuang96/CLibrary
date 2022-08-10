@@ -14,7 +14,12 @@
 #define PORT 8888                   /* TCP port number                  */
 #define MAXCLIENTS 16               /* Maximum number of TCP clients    */
 #define BUFFERSIZE 256              /* Data buffer size for TCP message */
-#define SERVERADD "192.168.1.61"    /* TCP server address               */
+#define SERVERADD "192.168.1.210"   /* TCP server address               */
+
+/* All clients should have the same first 3 octents, example: 192.168.1.XXX */
+/* this macro is the smallest 4th octents of all clients                    */
+#define MINCLIENTADD 211
+
 
 /* Update frequency of TCP in HZ
  * tcp_server_monitor is a blocking function and will block for 1/TCPUPDATEFREQ

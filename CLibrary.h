@@ -40,13 +40,11 @@ extern FILE *error_log_;
 /* Code running state */
 extern state_e state_;
 
-/* TCP Communication */
-extern int master_socket_, client_socket_[MAXCLIENTS];
-
 
 /******************************* CLib_Strings.c *******************************/
 void init_string(string_t *s);
 size_t writefunc(void *ptr, size_t size, size_t nmemb, string_t *s);
+int last_ip_digit( char ip_add[] );
 
 /******************************** CLib_Time.c ********************************/
 void print_time(void);
