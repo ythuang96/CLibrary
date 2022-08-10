@@ -3,13 +3,12 @@
 /*
  * Setup server side for TCP
  * Arguments:
- *   None
+ *   master_socket_ptr: [int *, Output] the master socket descriptor
  * Return:
- *    master_socket: the master socket descriptor, if setup successful
+ *    0: if setup successful
  *   -1: if setup failed
  */
-int tcp_server_setup( void ) {
-  int master_socket;
+int tcp_server_setup( int *master_socket_ptr ) {
   int opt = 1;
   struct sockaddr_in address;
 
@@ -20,20 +19,20 @@ int tcp_server_setup( void ) {
 
   /* Create a master socket
    * AF_INET for IPV4, SOCK_STREAM for TCP, 0 for default protocol
-   * Creates a socket descriptor: master_socket */
-  if ( (master_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
+   * Creates a socket descriptor: *master_socket_ptr */
+  if ( (*master_socket_ptr = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
     return -1;
   }
 
   /* Set master socket to allow multiple connections */
-  if ( setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt,
+  if ( setsockopt(*master_socket_ptr, SOL_SOCKET, SO_REUSEADDR, (char *)&opt,
         sizeof(opt)) < 0 ) {
     return -1;
   }
 
   /* Bind the socket to localhost port 8888
    * Bind the socket to the address and port number specified in address */
-  if (bind(master_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
+  if (bind(*master_socket_ptr, (struct sockaddr *)&address, sizeof(address)) < 0) {
     return -1;
   }
 
@@ -42,11 +41,11 @@ int tcp_server_setup( void ) {
    * approach the server to make a connection.
    * 10 backlog, defines the maximum length of pending connections for the
    * master socket */
-  if (listen(master_socket, 10) < 0) {
+  if (listen(*master_socket_ptr, 10) < 0) {
     return -1;
   }
 
-  return master_socket;
+  return 0;
 }
 
 

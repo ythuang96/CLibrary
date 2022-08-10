@@ -56,7 +56,7 @@ int current_time(void);
 void SigHandler(int dummy);
 
 /********************************* CLib_TCP.c *********************************/
-int tcp_server_setup( void );
+int tcp_server_setup( int *master_socket_ptr );
 int tcp_server_monitor( int master_socket, int client_sockets[MAXCLIENTS] );
 void tcp_server_cleanup( int master_socket , int client_sockets[MAXCLIENTS] );
 
