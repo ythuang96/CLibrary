@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/time.h>
+#include <sys/epoll.h>
 
 #include <CLibaraySettings.h>
 
@@ -56,8 +57,8 @@ void SigHandler(int dummy);
 
 /********************************* CLib_TCP.c *********************************/
 int tcp_server_setup( void );
-int tcp_server_monitor( int master_socket, int client_socket[MAXCLIENTS] );
-void tcp_server_cleanup( int master_socket , int client_socket[MAXCLIENTS] );
+int tcp_server_monitor( int master_socket, int client_sockets[MAXCLIENTS] );
+void tcp_server_cleanup( int master_socket , int client_sockets[MAXCLIENTS] );
 
 
 #endif
