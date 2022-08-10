@@ -191,3 +191,18 @@ int tcp_server_monitor( int master_socket, int client_socket[MAXCLIENTS] ) {
 
 
 
+void tcp_server_cleanup( int master_socket , int client_socket[MAXCLIENTS] ) {
+  int i;
+
+  /* close master_socket */
+  close( master_socket );
+  /* close client sockets */
+  for ( i = 0 ; i < MAXCLIENTS ; i++) {
+    if ( client_socket[i] > 0 ) {
+      close( client_socket[i] );
+    }
+  }
+
+  return;
+}
+
