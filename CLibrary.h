@@ -56,9 +56,9 @@ int current_time(void);
 void SigHandler(int dummy);
 
 /********************************* CLib_TCP.c *********************************/
-int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_event events_monitored[MAXCLIENTS+1] );
-int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event events_monitored[MAXCLIENTS+1] );
-void tcp_server_cleanup( int master_socket, int epoll_fd, struct epoll_event events_monitored[MAXCLIENTS+1] );
+int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_event events_monitored[TCPMAXCLIENTS+1] );
+int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event events_monitored[TCPMAXCLIENTS+1] );
+void tcp_server_cleanup( int master_socket, int epoll_fd, struct epoll_event events_monitored[TCPMAXCLIENTS+1] );
 
 
 #endif

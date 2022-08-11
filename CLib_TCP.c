@@ -12,7 +12,7 @@
  *    0: if setup successful
  *   -1: if setup failed
  */
-int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_event events_monitored[MAXCLIENTS+1] ) {
+int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
   int opt = 1;
   int i;
   struct sockaddr_in address;
@@ -20,7 +20,7 @@ int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_ev
   /* Type of socket created */
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = INADDR_ANY;
-  address.sin_port = htons( PORT );
+  address.sin_port = htons( TCPPORT );
 
   /* Create a master socket
    * AF_INET for IPV4, SOCK_STREAM for TCP, 0 for default protocol
@@ -44,9 +44,9 @@ int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_ev
   /* Listen
    * puts the server socket in a passive mode, where it waits for the client to
    * approach the server to make a connection.
-   * MAXCLIENTS backlog, defines the maximum length of pending connections for
+   * TCPMAXCLIENTS backlog, defines the maximum length of pending connections for
    * the master socket */
-  if (listen(*master_socket_ptr, MAXCLIENTS) < 0) return -1;
+  if (listen(*master_socket_ptr, TCPMAXCLIENTS) < 0) return -1;
 
 
   /* Create epoll file descriptor */
@@ -62,7 +62,7 @@ int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_ev
 
 
   /* Initialise all client sockets to -1 */
-  for ( i = 1 ; i < MAXCLIENTS+1 ; i++) {
+  for ( i = 1 ; i < TCPMAXCLIENTS+1 ; i++) {
     events_monitored[i].data.fd = -1;
   }
 
@@ -84,19 +84,19 @@ int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_ev
  *    0: on success
  *   -1: on failure
  */
-int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event events_monitored[MAXCLIENTS+1] ) {
+int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
   int event_count, i;
   /* message length */
   int bytes_read;
   /* data buffer */
-  char buffer[BUFFERSIZE];
+  char buffer[TCPBUFFERSIZE];
   /* temp socket descripters */
   int sd, new_socket;
 
   /* array_postion in events_monitored */
   int array_position;
   /* array to store the active_events */
-  struct epoll_event active_events[MAXCLIENTS];
+  struct epoll_event active_events[TCPMAXCLIENTS];
 
   /* Holds address to new socketets */
   struct sockaddr_in address;
@@ -107,7 +107,7 @@ int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event even
   /**************************** Monitor Activity ******************************/
   /* Wait for an activity on one of the sockets, timeout is set to update at
    * TCPUPDATEFREQ */
-  event_count = epoll_wait(epoll_fd, active_events, MAXCLIENTS, 1000/TCPUPDATEFREQ);
+  event_count = epoll_wait(epoll_fd, active_events, TCPMAXCLIENTS, 1000/TCPUPDATEFREQ);
   /* Whenever a new client connects, master_socket will be activated and a new
    * fd will be open for that client. We will store its fd in the array
    * events_monitored and in the add it to epoll to monitor for activity from
@@ -133,7 +133,7 @@ int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event even
         new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
       /* Add new socket to be monitors */
-      array_position = last_ip_digit(inet_ntoa(address.sin_addr))-MINCLIENTADD+1;
+      array_position = last_ip_digit(inet_ntoa(address.sin_addr))-TCPMINCLIENTADD+1;
       events_monitored[array_position].events = EPOLLIN; /* watch for input events */
       events_monitored[array_position].data.fd = new_socket;
       epoll_ctl(epoll_fd, EPOLL_CTL_ADD, new_socket, &events_monitored[array_position]);
@@ -145,7 +145,7 @@ int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event even
 
       /* Read incomming message and store in buffer,
        * and return the number of bytes read to bytes_read */
-      bytes_read = read( sd , buffer, BUFFERSIZE);
+      bytes_read = read( sd , buffer, TCPBUFFERSIZE);
 
       if ( bytes_read == 0) {
         /* If valread is 0, then the client disconnected, get details and print */
@@ -155,7 +155,7 @@ int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event even
               inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
         /* Remove the client socket from events_monitored, and close the socket */
-        array_position = last_ip_digit(inet_ntoa(address.sin_addr))-MINCLIENTADD+1;
+        array_position = last_ip_digit(inet_ntoa(address.sin_addr))-TCPMINCLIENTADD+1;
         events_monitored[array_position].data.fd = -1;
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, sd, &events_monitored[array_position]);
         close( sd );
@@ -190,11 +190,11 @@ int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event even
  * Return:
  *   None
  */
-void tcp_server_cleanup( int master_socket, int epoll_fd, struct epoll_event events_monitored[MAXCLIENTS+1] ) {
+void tcp_server_cleanup( int master_socket, int epoll_fd, struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
   int i;
 
   /* close client sockets */
-  for ( i = 1; i < MAXCLIENTS+1; i++) {
+  for ( i = 1; i < TCPMAXCLIENTS+1; i++) {
     if ( events_monitored[i].data.fd > 0 ) {
       close( events_monitored[i].data.fd );
     }
