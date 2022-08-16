@@ -12,7 +12,8 @@
  *    0: if setup successful
  *   -1: if setup failed
  */
-int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
+int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, \
+  struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
   int opt = 1;
   int i;
   struct sockaddr_in address;
@@ -84,7 +85,8 @@ int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_ev
  *    0: on success
  *   -1: on failure
  */
-int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
+int tcp_server_monitor( int master_socket, int epoll_fd, \
+    struct epoll_event events_monitored[TCPMAXCLIENTS+1], tcpmessagering_t *ring_ptr) {
   int event_count, i;
   /* message length */
   int bytes_read;
@@ -143,14 +145,17 @@ int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event even
       /* else it is some IO operation on some client socket */
       sd = active_events[i].data.fd;
 
+      /* Clear buffer first */
+      memset( buffer, '\0', sizeof(buffer) );
+
       /* Read incomming message and store in buffer,
-       * and return the number of bytes read to bytes_read */
-      bytes_read = read( sd , buffer, TCPBUFFERSIZE);
+       * and return the number of bytes read to bytes_read,
+       * the TCPBUFFERSIZE-1 is there to leave one extra space for NULL termination */
+      bytes_read = read( sd , buffer, TCPBUFFERSIZE-1 );
 
       if ( bytes_read == 0) {
         /* If valread is 0, then the client disconnected, get details and print */
-        getpeername(sd , (struct sockaddr*)&address , \
-            (socklen_t*)&addrlen);
+        getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
         printf("Host disconnected , ip %s , port %d \n" ,
               inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
@@ -163,12 +168,13 @@ int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event even
 
       /* Else, a message is sent from the clinet */
       else {
-        /* NULL terminate buffer */
-        buffer[bytes_read] = '\0';
-        printf("Message from client is: %s\n", buffer);
+        /* Get client detail */
+        getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
 
-        nsleep(1000000000);
-        send(sd , "Hello from server!" , 18 , 0 );
+        /* Add message and sender IP to the TCP message ring.
+         * Note that Buffer is already NULL terminated,
+         * due to the memset and TCPBUFFERSIZE-1 in previous code */
+        tcp_add_message( ring_ptr, buffer, inet_ntoa(address.sin_addr) );
       }
     }
   }
@@ -190,7 +196,8 @@ int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event even
  * Return:
  *   None
  */
-void tcp_server_cleanup( int master_socket, int epoll_fd, struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
+void tcp_server_cleanup( int master_socket, int epoll_fd, \
+  struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
   int i;
 
   /* close client sockets */
@@ -321,7 +328,8 @@ void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr ) {
  *
  * Return: None
  */
-void tcp_process_message( tcpmessagering_t *ring_ptr, void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
+void tcp_process_message( tcpmessagering_t *ring_ptr, \
+  void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
   if ( ring_ptr->ptr_processing == ring_ptr->ptr_new ) {
     /* if ptr_processing and ptr_new is the same, then the ring is empty and
      * call the function *emptyring_func_ptr if it is not a NULL pointer */
@@ -355,7 +363,8 @@ void tcp_process_message( tcpmessagering_t *ring_ptr, void (*processing_func_ptr
  *
  * Return: None
  */
-void tcp_add_message( tcpmessagering_t *ring_ptr, char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]) {
+void tcp_add_message( tcpmessagering_t *ring_ptr, \
+  char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]) {
   /* First clear the address */
   tcp_clear_message( ring_ptr->ptr_new );
 
