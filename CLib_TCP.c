@@ -209,3 +209,166 @@ void tcp_server_cleanup( int master_socket, int epoll_fd, struct epoll_event eve
   return;
 }
 
+
+/*
+ * Initialize a tcp message ring
+ *
+ * Arguments:
+ *   ring_ptr: [Input/Output] pointer to a message ring that is type tcpmessagering_t
+ *
+ * Return: None
+ */
+void tcp_ring_init( tcpmessagering_t *ring_ptr ) {
+  int i;
+
+  for (i = 0; i < TCPRINGSIZE; i++ ) {
+    /* loop over all messages in the ring and clear those */
+    tcp_clear_message( &(ring_ptr->messages[i]) );
+  }
+
+  /* set start and end pointers */
+  ring_ptr->ptr_start = &(ring_ptr->messages[0]);
+  ring_ptr->ptr_end   = &(ring_ptr->messages[TCPRINGSIZE-1]);
+
+  /* initialize processing and new pointers to the start pointer */
+  ring_ptr->ptr_processing = ring_ptr->ptr_start;
+  ring_ptr->ptr_new        = ring_ptr->ptr_start;
+
+  return;
+}
+
+
+/*
+ * Clear a message
+ *
+ * Arguments:
+ *   message_ptr: [Input/Output] pointer to a message that is type tcpmessage_t
+ *
+ * Return: None
+ */
+void tcp_clear_message( tcpmessage_t *message_ptr ) {
+  memset( message_ptr->message, '\0', sizeof(message_ptr->message) );
+  memset( message_ptr->source_ip, '\0', sizeof(message_ptr->source_ip) );
+  return;
+}
+
+
+/*
+ * Increment the processing pointer in a message ring
+ *
+ * Arguments:
+ *   ring_ptr: [Input/Output] pointer to a message ring that is type tcpmessagering_t
+ *
+ * Return: None
+ */
+void tcp_increment_ring_ptr_processing( tcpmessagering_t *ring_ptr ) {
+  if ( ring_ptr->ptr_processing == ring_ptr->ptr_end ) {
+    /* if the pointer is already the end pointer, then set it to the start pointer */
+    ring_ptr->ptr_processing = ring_ptr->ptr_start;
+  }
+  else {
+    /* otherwise, increment it by 1 */
+    ring_ptr->ptr_processing ++;
+  }
+  return;
+}
+
+
+/*
+ * Increment the new pointer in a message ring
+ *
+ * Arguments:
+ *   ring_ptr: [Input/Output] pointer to a message ring that is type tcpmessagering_t
+ *
+ * Return: None
+ */
+void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr ) {
+  if ( ring_ptr->ptr_new == ring_ptr->ptr_end ) {
+    /* if the pointer is already the end pointer, then set it to the start pointer */
+    ring_ptr->ptr_new = ring_ptr->ptr_start;
+  }
+  else {
+    /* otherwise, increment it by 1 */
+    ring_ptr->ptr_new ++;
+  }
+
+  /* If after incrementing the ptr_new, it reaches the same as ptr_processing
+   * (catching up from behind), then it indicates that the ring is full.
+   * It will print an error message and pretend the entire ring is empty, which
+   * means the entire ring is effectively cleared and all data lost */
+  if (ring_ptr->ptr_new == ring_ptr->ptr_processing) {
+    print_time();
+    fprintf(error_log_, "Ring full, entire ring cleared, data lose occured!\n");
+  }
+
+  return;
+}
+
+
+/*
+ * Process one message in the message ring
+ *
+ * Arguments
+ *   ring_ptr:            [Input/Output]
+ *                        pointer to the message ring
+ *   processing_func_ptr: [Input]
+ *                        pointer to the function that is used for processsing,
+ *                        this function should take (tcpmessage_t *) as an input
+ *                        this function will be executed once with the first element in the ring as the input
+ *   emptyring_func_ptr:  [Input]
+ *                        pointer to the function that is used if the ring is empty
+ *                        this pointer can be NULL if you don't want anything done on a empty ring
+ *
+ * Return: None
+ */
+void tcp_process_message( tcpmessagering_t *ring_ptr, void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
+  if ( ring_ptr->ptr_processing == ring_ptr->ptr_new ) {
+    /* if ptr_processing and ptr_new is the same, then the ring is empty and
+     * call the function *emptyring_func_ptr if it is not a NULL pointer */
+    if (emptyring_func_ptr) (*emptyring_func_ptr)();
+    return;
+  }
+  else { /* if the ring is not empty */
+    /* process the first non-empty element in the ring */
+    (*processing_func_ptr)( ring_ptr->ptr_processing );
+    /* clear the proccessed message */
+    tcp_clear_message( ring_ptr->ptr_processing );
+    /* increment the proccessing pointer */
+    tcp_increment_ring_ptr_processing( ring_ptr );
+  }
+  return;
+}
+
+
+/*
+ * Add one message to the message ring
+ *
+ * Arguments
+ *   ring_ptr:  [Input/Output]
+ *              pointer to the message ring
+ *   message:   [Input]
+ *              string to put as the message
+ *              messages with more than TCPBUFFERSIZE-1 characters will have the end discarded
+ *   source_ip: [Input]
+ *              string to put as the source ip address for this new message
+ *              string with more than IPADDRSIZE-1 characters will have the end discarded
+ *
+ * Return: None
+ */
+void tcp_add_message( tcpmessagering_t *ring_ptr, char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]) {
+  /* First clear the address */
+  tcp_clear_message( ring_ptr->ptr_new );
+
+  /* write to the ring */
+  strncpy( ring_ptr->ptr_new->message  , message  , TCPBUFFERSIZE-1 );
+  strncpy( ring_ptr->ptr_new->source_ip, source_ip, IPADDRSIZE-1    );
+  /* Note that NULL termination is automatic, since message and source_ip are
+   * always set with NULL before this operation, and we only copy size-1
+   * characters, which will ensure that at least the last character will always
+   * be NULL. */
+
+  /* Increment ptr_new */
+  tcp_increment_ring_ptr_new( ring_ptr );
+
+  return;
+}

@@ -26,12 +26,30 @@
 
 #include <CLibaraySettings.h>
 
+#define IPADDRSIZE 16
+
 
 /*********************************** STRUCT ***********************************/
 typedef struct string_t {
   char *ptr;
   size_t len;
 } string_t;
+
+typedef struct tcpmessage_t {
+  char message[TCPBUFFERSIZE];
+  char source_ip[IPADDRSIZE];
+} tcpmessage_t;
+
+typedef struct tcpmessagering_t {
+  tcpmessage_t messages[TCPRINGSIZE];
+  /* points to the item to be processed, which is the first one in the squence */
+  tcpmessage_t *ptr_processing;
+  /* points to the item for new storage, which is the first empty one (the one behind the last in the squence) */
+  tcpmessage_t *ptr_new;
+  /* start and end address of the entire ring, set during initialization and use for incrementing the ring pointers */
+  tcpmessage_t *ptr_start;
+  tcpmessage_t *ptr_end;
+} tcpmessagering_t;
 
 
 /****************************** GLOBAL VARIABLES ******************************/
@@ -59,6 +77,13 @@ void SigHandler(int dummy);
 int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, struct epoll_event events_monitored[TCPMAXCLIENTS+1] );
 int tcp_server_monitor( int master_socket, int epoll_fd, struct epoll_event events_monitored[TCPMAXCLIENTS+1] );
 void tcp_server_cleanup( int master_socket, int epoll_fd, struct epoll_event events_monitored[TCPMAXCLIENTS+1] );
+
+void tcp_ring_init( tcpmessagering_t *ring_ptr );
+void tcp_clear_message( tcpmessage_t *message_ptr );
+void tcp_increment_ring_ptr_processing( tcpmessagering_t *ring_ptr );
+void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr );
+void tcp_process_message( tcpmessagering_t *ring_ptr, void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) );
+void tcp_add_message( tcpmessagering_t *ring_ptr, char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]);
 
 
 #endif
