@@ -90,5 +90,9 @@ void tcp_process_message( tcpmessagering_t *ring_ptr, \
 void tcp_add_message( tcpmessagering_t *ring_ptr, \
   char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]);
 
+/********************************* CLib_ADS1115.c *********************************/
+uint16_t ADS1115_SingleEnded_Config( double VRange, int DateRate );
+double ADS1115_SingleEnded_Read( int FD, uint16_t config, int channel );
+
 
 #endif
