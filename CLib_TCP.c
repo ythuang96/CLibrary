@@ -1,7 +1,5 @@
 #include "CLibrary.h"
 
-#define TCPBUFFERSIZE 256              /* Data buffer size for TCP message */
-#define TCPRINGSIZE 8                  /* Size of TCP message ring         */
 
 /************ Static Variables Available in and only in this file ************/
 /* IP setting for this TCP instance */
@@ -12,10 +10,6 @@ static int port_;            /* TCP port number                  */
 static int min_client_addr_; /* The smallest 4th octents of all clients */
 static int max_client_addr_; /* The largest  4th octents of all clients */
 static int num_clients_;     /* Total number of clients                 */
-
-/* Data structure sizes */
-static int message_size_; /* Maximum character counts for TCP messages        */
-static int ring_size_;    /* Maximum messages to hold in queue for processing */
 
 static double update_freq_; /* Update freqeuncy of TCP */
 
@@ -45,7 +39,7 @@ static tcpmessagering_t server_message_in_ring_, server_message_out_ring_;
  * Return None
  */
 void tcp_lib_init(char* server_addr, int port, int min_client_addr, int max_client_addr, \
-  int message_size, int ring_size, double update_freq ) {
+  double update_freq ) {
 
   server_addr_ = server_addr;
   port_        = port;
@@ -54,8 +48,6 @@ void tcp_lib_init(char* server_addr, int port, int min_client_addr, int max_clie
   max_client_addr_ = max_client_addr;
   num_clients_     = max_client_addr_ - min_client_addr_ + 1;
 
-  message_size_ = message_size;
-  ring_size_    = ring_size;
   update_freq_  = update_freq;
 
   tcp_ring_init( &server_message_in_ring_  );

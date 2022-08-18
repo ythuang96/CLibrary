@@ -25,9 +25,9 @@
 #include <sys/time.h>
 #include <sys/epoll.h>
 
-#include <CLibaraySettings.h>
-
-#define IPADDRSIZE 16
+#define IPADDRSIZE 16      /* Size of IP Address String        */
+#define TCPBUFFERSIZE 256  /* Data buffer size for TCP message */
+#define TCPRINGSIZE 8      /* Size of TCP message ring         */
 
 
 /*********************************** STRUCT ***********************************/
@@ -57,10 +57,6 @@ typedef struct tcpmessagering_t {
 /* pointer for error log file */
 extern FILE *error_log_;
 
-/* Code running state */
-extern state_e state_;
-
-
 /******************************* CLib_Strings.c *******************************/
 void init_string(string_t *s);
 size_t writefunc(void *ptr, size_t size, size_t nmemb, string_t *s);
@@ -71,12 +67,9 @@ void print_time(void);
 void nsleep(uint64_t ns);
 int current_time(void);
 
-/***************************** CLib_SigHandler.c *****************************/
-void SigHandler(int dummy);
-
 /********************************* CLib_TCP.c *********************************/
 void tcp_lib_init(char* server_addr, int port, int min_client_addr, int max_client_addr, \
-  int message_size, int ring_size, double update_freq );
+  double update_freq );
 
 int tcp_server_setup( void );
 int tcp_server_monitor( void );
