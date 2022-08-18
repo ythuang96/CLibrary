@@ -1,15 +1,15 @@
 # This compiles a library, the target must be in .a fromat
-TARGET = libmyclib.a
+TARGET = ../libmyclib.a
 
 # Path to the header files so that the full path does not need to be specified
 # for the include statement
-INCLUDEPATH = -I ./
+INCLUDEPATH = -I ../
 
 # Path to search for source files, separated wwith :
-VPATH = ./
+VPATH = ../src
 
-SOURCES		:= $(wildcard ./*.c)
-INCLUDES	:= $(wildcard ./*.h)
+SOURCES		:= $(wildcard ../src/CLib_*.c)
+INCLUDES	:= ../CLibrary.h
 
 
 CC		:= gcc
