@@ -75,13 +75,7 @@ int tcp_server_setup( void );
 int tcp_server_monitor( void );
 void tcp_server_cleanup( void );
 
-void tcp_ring_init( tcpmessagering_t *ring_ptr );
-void tcp_clear_message( tcpmessage_t *message_ptr );
-void tcp_increment_ring_ptr_processing( tcpmessagering_t *ring_ptr );
-void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr );
 void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) );
-void tcp_add_message( tcpmessagering_t *ring_ptr, \
-  char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]);
 
 
 #endif

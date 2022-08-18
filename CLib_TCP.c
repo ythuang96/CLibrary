@@ -25,6 +25,15 @@ static struct epoll_event * server_events_monitored_ptr_;
 static tcpmessagering_t server_message_in_ring_, server_message_out_ring_;
 
 
+/************ Static Functions Limited to Access within this File ************/
+static void tcp_ring_init( tcpmessagering_t *ring_ptr );
+static void tcp_clear_message( tcpmessage_t *message_ptr );
+static void tcp_increment_ring_ptr_processing( tcpmessagering_t *ring_ptr );
+static void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr );
+static void tcp_add_message( tcpmessagering_t *ring_ptr, \
+  char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]);
+
+
 
 /*
  * Initialize the libraray with all the settings needed
