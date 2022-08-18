@@ -1,70 +1,147 @@
 #include "CLibrary.h"
 
+#define TCPBUFFERSIZE 256              /* Data buffer size for TCP message */
+#define TCPRINGSIZE 8                  /* Size of TCP message ring         */
+
+/************ Static Variables Available in and only in this file ************/
+/* IP setting for this TCP instance */
+static char* server_addr_;   /* TCP server address               */
+static int port_;            /* TCP port number                  */
+
+/* All clients should have the same first 3 octents, example: 192.168.1.XXX */
+static int min_client_addr_; /* The smallest 4th octents of all clients */
+static int max_client_addr_; /* The largest  4th octents of all clients */
+static int num_clients_;     /* Total number of clients                 */
+
+/* Data structure sizes */
+static int message_size_; /* Maximum character counts for TCP messages        */
+static int ring_size_;    /* Maximum messages to hold in queue for processing */
+
+static double update_freq_; /* Update freqeuncy of TCP */
+
+
+/* server socket */
+static int server_socket_;
+/* epoll stuff   */
+static int server_epoll_fd_;
+static struct epoll_event * server_events_monitored_ptr_;
+
+
+/* message queues for the server */
+static tcpmessagering_t server_message_in_ring_, server_message_out_ring_;
+
+
+
+/*
+ * Initialize the libraray with all the settings needed
+ * Arguments:
+ *   server_addr:     [Input] string for server address
+ *   port:            [Input] TCP port number
+ *   min_client_addr: [Input] The smallest 4th octents of all clients
+ *   max_client_addr: [Input] The largest  4th octents of all clients
+ *   message_size:    [Input] Maximum character counts for TCP messages
+ *   ring_size:       [Input] Maximum messages to hold in queue for processing
+ *   update_freq:     [Input] Update freqeuncy of TCP
+ * Return None
+ */
+void tcp_lib_init(char* server_addr, int port, int min_client_addr, int max_client_addr, \
+  int message_size, int ring_size, double update_freq ) {
+
+  server_addr_ = server_addr;
+  port_        = port;
+
+  min_client_addr_ = min_client_addr;
+  max_client_addr_ = max_client_addr;
+  num_clients_     = max_client_addr_ - min_client_addr_ + 1;
+
+  message_size_ = message_size;
+  ring_size_    = ring_size;
+  update_freq_  = update_freq;
+
+  tcp_ring_init( &server_message_in_ring_  );
+  tcp_ring_init( &server_message_out_ring_ );
+
+  return;
+}
+
+
 /*
  * Setup server side for TCP
- * Arguments:
- *   master_socket_ptr: [Output] pointer to the master socket descriptor
- *   epoll_fd_ptr:      [Output] pointer to the epoll file descriptor
- *   events_monitored:  [Output] array of events that are monitored, with first
- *                               one being the master socket and the client
- *                               socket arranged base on client ip address
+ * Arguments: None
  * Return:
  *    0: if setup successful
  *   -1: if setup failed
  */
-int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, \
-  struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
+int tcp_server_setup( void ) {
   int opt = 1;
   int i;
   struct sockaddr_in address;
 
+
+  /* allocate server_events_monitored_ptr_ */
+  server_events_monitored_ptr_ = (struct epoll_event*) calloc(num_clients_+1, sizeof(struct epoll_event));
+  if (server_events_monitored_ptr_ == NULL) {
+    fprintf(stderr, "Out of memory!\n");
+    exit(1);
+  }
+
   /* Type of socket created */
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = INADDR_ANY;
-  address.sin_port = htons( TCPPORT );
+  address.sin_port = htons( port_ );
 
   /* Create a master socket
    * AF_INET for IPV4, SOCK_STREAM for TCP, 0 for default protocol
-   * Creates a socket descriptor: *master_socket_ptr */
-  if ( (*master_socket_ptr = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
+   * Creates a socket descriptor: server_socket_ */
+  if ( (server_socket_ = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
+    free( server_events_monitored_ptr_ );
     return -1;
   }
 
   /* Set master socket to allow multiple connections */
-  if ( setsockopt(*master_socket_ptr, SOL_SOCKET, SO_REUSEADDR, (char *)&opt,
+  if ( setsockopt(server_socket_, SOL_SOCKET, SO_REUSEADDR, (char *)&opt,
         sizeof(opt)) < 0 ) {
+    free( server_events_monitored_ptr_ );
     return -1;
   }
 
   /* Bind the socket to localhost port 8888
    * Bind the socket to the address and port number specified in address */
-  if (bind(*master_socket_ptr, (struct sockaddr *)&address, sizeof(address)) < 0) {
+  if (bind(server_socket_, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    free( server_events_monitored_ptr_ );
     return -1;
   }
 
   /* Listen
    * puts the server socket in a passive mode, where it waits for the client to
    * approach the server to make a connection.
-   * TCPMAXCLIENTS backlog, defines the maximum length of pending connections for
+   * num_clients_ backlog, defines the maximum length of pending connections for
    * the master socket */
-  if (listen(*master_socket_ptr, TCPMAXCLIENTS) < 0) return -1;
+  if (listen(server_socket_, num_clients_) < 0) {
+    free( server_events_monitored_ptr_ );
+    return -1;
+  }
 
 
   /* Create epoll file descriptor */
-  if ( (*epoll_fd_ptr = epoll_create1(0)) == -1) return -1;
+  if ( (server_epoll_fd_ = epoll_create1(0)) == -1) {
+    free( server_events_monitored_ptr_ );
+    return -1;
+  }
 
-  /* Add master_socket to epoll monitor */
-  events_monitored[0].events = EPOLLIN; /* watch for input events */
-  events_monitored[0].data.fd = *master_socket_ptr;
-  if(epoll_ctl(*epoll_fd_ptr, EPOLL_CTL_ADD, *master_socket_ptr, &events_monitored[0])) {
-    close(*epoll_fd_ptr);
+  /* Add server_socket_ to epoll monitor */
+  server_events_monitored_ptr_->events = EPOLLIN; /* watch for input events */
+  server_events_monitored_ptr_->data.fd = server_socket_;
+  if(epoll_ctl(server_epoll_fd_, EPOLL_CTL_ADD, server_socket_, server_events_monitored_ptr_)) {
+    close(server_epoll_fd_);
+    free( server_events_monitored_ptr_ );
     return -1;
   }
 
 
   /* Initialise all client sockets to -1 */
-  for ( i = 1 ; i < TCPMAXCLIENTS+1 ; i++) {
-    events_monitored[i].data.fd = -1;
+  for ( i = 1 ; i < num_clients_+1 ; i++) {
+    (server_events_monitored_ptr_ + i)->data.fd = -1;
   }
 
   return 0;
@@ -73,20 +150,12 @@ int tcp_server_setup( int *master_socket_ptr, int *epoll_fd_ptr, \
 
 /*
  * Montior TCP comm from the server side, run this continuously in a loop
- * Arguments:
- *   master_socket:    [Input]
- *                     file ID for master socket
- *   epoll_fd:         [Input]
- *                     epoll file descriptor
- *   events_monitored: [Input/Output]
- *                     array of file IDs for the client socket, gets updated by
- *                     this function if new clients connects to the server
+ * Arguments: None
  * Return:
  *    0: on success
  *   -1: on failure
  */
-int tcp_server_monitor( int master_socket, int epoll_fd, \
-    struct epoll_event events_monitored[TCPMAXCLIENTS+1], tcpmessagering_t *ring_ptr) {
+int tcp_server_monitor( void ) {
   int event_count, i;
   /* message length */
   int bytes_read;
@@ -95,10 +164,10 @@ int tcp_server_monitor( int master_socket, int epoll_fd, \
   /* temp socket descripters */
   int sd, new_socket;
 
-  /* array_postion in events_monitored */
+  /* array_postion in server_events_monitored_ptr_ */
   int array_position;
   /* array to store the active_events */
-  struct epoll_event active_events[TCPMAXCLIENTS];
+  struct epoll_event * active_events_ptr;
 
   /* Holds address to new socketets */
   struct sockaddr_in address;
@@ -106,44 +175,53 @@ int tcp_server_monitor( int master_socket, int epoll_fd, \
   addrlen = sizeof(address);
 
 
+  /* allocate active_events_ptr */
+  active_events_ptr = (struct epoll_event*) calloc(num_clients_+1, sizeof(struct epoll_event));
+  if (active_events_ptr == NULL) {
+    fprintf(stderr, "Out of memory!\n");
+    exit(1);
+  }
+
   /**************************** Monitor Activity ******************************/
   /* Wait for an activity on one of the sockets, timeout is set to update at
-   * TCPUPDATEFREQ */
-  event_count = epoll_wait(epoll_fd, active_events, TCPMAXCLIENTS, 1000/TCPUPDATEFREQ);
-  /* Whenever a new client connects, master_socket will be activated and a new
+   * update_freq_ */
+  event_count = epoll_wait(server_epoll_fd_, active_events_ptr, num_clients_+1, round(1000.0/update_freq_));
+  /* Whenever a new client connects, server_socket_ will be activated and a new
    * fd will be open for that client. We will store its fd in the array
-   * events_monitored and in the add it to epoll to monitor for activity from
-   * this client.
+   * server_events_monitored_ptr_ and in the add it to epoll to monitor for
+   * activity from this client.
    * Similarly, if an old client sends some data, the file descrpitor will
    * activated. */
 
   /********************* Loop over all the active events *********************/
   for (i = 0; i < event_count; i++) {
 
-    if ( active_events[i].data.fd == master_socket ) {
+    if ( (active_events_ptr + i)->data.fd == server_socket_ ) {
       /*************************** New Connection *****************************/
       /* If the master socket is active, then it is an new connection. */
 
       /* accept new connection */
-      new_socket = accept( master_socket, (struct sockaddr *)&address, \
+      new_socket = accept( server_socket_, (struct sockaddr *)&address, \
         (socklen_t*)&addrlen );
-
-      if ( new_socket < 0 ) return -1;
+      if ( new_socket < 0 ) {
+        free( active_events_ptr );
+        return -1;
+      }
 
       /* Print new connection information */
       printf("New connection , socket fd is %d , ip is : %s , port : %d\n" , \
         new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
       /* Add new socket to be monitors */
-      array_position = last_ip_digit(inet_ntoa(address.sin_addr))-TCPMINCLIENTADD+1;
-      events_monitored[array_position].events = EPOLLIN; /* watch for input events */
-      events_monitored[array_position].data.fd = new_socket;
-      epoll_ctl(epoll_fd, EPOLL_CTL_ADD, new_socket, &events_monitored[array_position]);
+      array_position = last_ip_digit(inet_ntoa(address.sin_addr))-min_client_addr_+1;
+      (server_events_monitored_ptr_ + array_position)->events = EPOLLIN; /* watch for input events */
+      (server_events_monitored_ptr_ + array_position)->data.fd = new_socket;
+      epoll_ctl(server_epoll_fd_, EPOLL_CTL_ADD, new_socket, (server_events_monitored_ptr_ + array_position));
     }
     else {
       /**************************** IO By Client ******************************/
       /* else it is some IO operation on some client socket */
-      sd = active_events[i].data.fd;
+      sd = (active_events_ptr + i)->data.fd;
 
       /* Clear buffer first */
       memset( buffer, '\0', sizeof(buffer) );
@@ -159,10 +237,10 @@ int tcp_server_monitor( int master_socket, int epoll_fd, \
         printf("Host disconnected , ip %s , port %d \n" ,
               inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
-        /* Remove the client socket from events_monitored, and close the socket */
-        array_position = last_ip_digit(inet_ntoa(address.sin_addr))-TCPMINCLIENTADD+1;
-        events_monitored[array_position].data.fd = -1;
-        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, sd, &events_monitored[array_position]);
+        /* Remove the client socket from server_events_monitored_ptr_, and close the socket */
+        array_position = last_ip_digit(inet_ntoa(address.sin_addr))-min_client_addr_+1;
+        (server_events_monitored_ptr_ + array_position)->data.fd = -1;
+        epoll_ctl(server_epoll_fd_, EPOLL_CTL_DEL, sd, (server_events_monitored_ptr_ + array_position));
         close( sd );
       }
 
@@ -174,11 +252,12 @@ int tcp_server_monitor( int master_socket, int epoll_fd, \
         /* Add message and sender IP to the TCP message ring.
          * Note that Buffer is already NULL terminated,
          * due to the memset and TCPBUFFERSIZE-1 in previous code */
-        tcp_add_message( ring_ptr, buffer, inet_ntoa(address.sin_addr) );
+        tcp_add_message( &server_message_in_ring_, buffer, inet_ntoa(address.sin_addr) );
       }
     }
   }
 
+  free( active_events_ptr );
   return 0;
 }
 
@@ -186,32 +265,27 @@ int tcp_server_monitor( int master_socket, int epoll_fd, \
 /*
  * Cleanup TCP comm from the server side, closes the master socket, client
  * sockets and the epoll file descriptor
- * Arguments:
- *   master_socket:    [Input]
- *                     file ID for master socket
- *   epoll_fd:         [Input]
- *                     epoll file descriptor
- *   events_monitored: [Input]
- *                     array of file IDs for the client socket
- * Return:
- *   None
+ * Arguments: None
+ * Return: None
  */
-void tcp_server_cleanup( int master_socket, int epoll_fd, \
-  struct epoll_event events_monitored[TCPMAXCLIENTS+1] ) {
+void tcp_server_cleanup( void ) {
   int i;
 
+  /* Free dynamic allocation */
+  free( server_events_monitored_ptr_ );
+
   /* close client sockets */
-  for ( i = 1; i < TCPMAXCLIENTS+1; i++) {
-    if ( events_monitored[i].data.fd > 0 ) {
-      close( events_monitored[i].data.fd );
+  for ( i = 1; i < num_clients_+1; i++) {
+    if ( (server_events_monitored_ptr_ + i)->data.fd > 0 ) {
+      close( (server_events_monitored_ptr_ + i)->data.fd );
     }
   }
 
-  /* close master_socket */
-  close( master_socket );
+  /* close server_socket_ */
+  close( server_socket_ );
 
   /* close epoll file descriptor */
-  close( epoll_fd );
+  close( server_epoll_fd_ );
 
   return;
 }
@@ -313,11 +387,9 @@ void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr ) {
 
 
 /*
- * Process one message in the message ring
+ * Process one message in the input message ring of the server
  *
  * Arguments
- *   ring_ptr:            [Input/Output]
- *                        pointer to the message ring
  *   processing_func_ptr: [Input]
  *                        pointer to the function that is used for processsing,
  *                        this function should take (tcpmessage_t *) as an input
@@ -328,9 +400,8 @@ void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr ) {
  *
  * Return: None
  */
-void tcp_process_message( tcpmessagering_t *ring_ptr, \
-  void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
-  if ( ring_ptr->ptr_processing == ring_ptr->ptr_new ) {
+void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
+  if ( server_message_in_ring_.ptr_processing == server_message_in_ring_.ptr_new ) {
     /* if ptr_processing and ptr_new is the same, then the ring is empty and
      * call the function *emptyring_func_ptr if it is not a NULL pointer */
     if (emptyring_func_ptr) (*emptyring_func_ptr)();
@@ -338,11 +409,11 @@ void tcp_process_message( tcpmessagering_t *ring_ptr, \
   }
   else { /* if the ring is not empty */
     /* process the first non-empty element in the ring */
-    (*processing_func_ptr)( ring_ptr->ptr_processing );
+    (*processing_func_ptr)( server_message_in_ring_.ptr_processing );
     /* clear the proccessed message */
-    tcp_clear_message( ring_ptr->ptr_processing );
+    tcp_clear_message( server_message_in_ring_.ptr_processing );
     /* increment the proccessing pointer */
-    tcp_increment_ring_ptr_processing( ring_ptr );
+    tcp_increment_ring_ptr_processing( &server_message_in_ring_ );
   }
   return;
 }
