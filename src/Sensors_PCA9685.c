@@ -46,22 +46,55 @@
 #define PCA9685_PRESCALE_MAX 255 /* maximum prescale value */
 
 
+/**************** Static Global Variables and Static Function ****************/
+static int i2c_fd_;
+
+static void PCA9685_setPWMFreq( double freq);
+static void PCA9685_setOutputMode( bool totempole);
+static void PCA9685_setPWM( uint8_t PinNum, uint16_t on, uint16_t off);
+
+
+/*
+ * This function initializes PCA9685
+ *
+ * Arguments:
+ *   i2c_addr:  [Input] the I2C address for ADS 1115, default should be 0x48
+ *   freq:      [Input] PWM fequency, should be between 23 and 1600 Hz
+ *   totempole: [Input] Totempole if true, open drain if false.
+ *                      LEDs with integrated zener diodes should only be driven in open drain mode.
+ *
+ * Return:
+ *   0 on success or -1 on failure
+ */
+int PCA9685_Init( int i2c_addr, double freq, bool totempole ) {
+  i2c_fd_ = wiringPiI2CSetup(i2c_addr);
+  if (i2c_fd_ == -1) {
+    printf("I2C Initialization failed. Most likely you are not root\n");
+    printf("Please remember to run as root.\n");
+    print_time();
+    fprintf(error_log_, "I2C Initialization failed. Most likely you are not root\n");
+    fprintf(error_log_, "Please remember to run as root.\n");
+    return -1 ;
+  }
+  PCA9685_setPWMFreq( freq );
+  PCA9685_setOutputMode( totempole );
+  return 0;
+}
 
 
 /*
  * Set the PWM frequency of the chip
  * Arguments
- *   FD:   [Input] I2C file descrpitor
  *   freq: [Input] PWM fequency, should be between 23 and 1600 Hz
  * Return None
  */
-void PCA9685_setPWMFreq(int FD, double freq) {
+void PCA9685_setPWMFreq( double freq) {
   int prescaleval;
   uint8_t prescale, mode;
 
 
   /* Disable all output first for an orderly shutdown, by writting a logic 1 to bit 4 in register ALL_LED_OFF_H */
-  wiringPiI2CWriteReg8(FD, PCA9685_ALLLED_OFF_H, 0x10);
+  wiringPiI2CWriteReg8(i2c_fd_, PCA9685_ALLLED_OFF_H, 0x10);
 
   /* Limit the frequency between 23 and 1600 Hz for the internal 25MHz oscillator */
   if (freq < 23) freq = 23;
@@ -79,20 +112,20 @@ void PCA9685_setPWMFreq(int FD, double freq) {
    * set the sleep and auto increment to 1 */
   mode = PCA9685_MODE1_SLEEP | PCA9685_MODE1_AI;
   /* Put the board to sleep */
-  wiringPiI2CWriteReg8(FD, PCA9685_MODE1, mode);
+  wiringPiI2CWriteReg8(i2c_fd_, PCA9685_MODE1, mode);
   /* Set the prescalar */
-  wiringPiI2CWriteReg8(FD, PCA9685_PRESCALE, prescale);
+  wiringPiI2CWriteReg8(i2c_fd_, PCA9685_PRESCALE, prescale);
   /* Set the sleep bit to 0 */
   mode = (mode & ~PCA9685_MODE1_SLEEP);
   /* Wake up the board */
-  wiringPiI2CWriteReg8(FD, PCA9685_MODE1, mode);
+  wiringPiI2CWriteReg8(i2c_fd_, PCA9685_MODE1, mode);
   /* Wait at least 500 us before restart, as required by datasheet */
   nsleep(5000000);
 
   /* Set the restart bit to 1  */
   mode = (mode | PCA9685_MODE1_RESTART);
   /* Restart */
-  wiringPiI2CWriteReg8(FD, PCA9685_MODE1, mode);
+  wiringPiI2CWriteReg8(i2c_fd_, PCA9685_MODE1, mode);
 
   return;
 }
@@ -102,20 +135,19 @@ void PCA9685_setPWMFreq(int FD, double freq) {
  * Sets the output mode of the PCA9685 to either open drain or push pull / totempole.
  * Warning: LEDs with integrated zener diodes should only be driven in open drain mode.
  * Parameter:
- *   FD:        [Input] I2C file descrpitor
  *   totempole: [Input] Totempole if true, open drain if false.
  * Return: None
  */
-void PCA9685_setOutputMode(int FD, bool totempole) {
+void PCA9685_setOutputMode( bool totempole) {
   uint8_t oldmode, newmode;
 
-  oldmode = wiringPiI2CReadReg8(FD, PCA9685_MODE2);
+  oldmode = wiringPiI2CReadReg8(i2c_fd_, PCA9685_MODE2);
   if (totempole) {
     newmode = oldmode | PCA9685_MODE2_OUTDRV;
   } else {
     newmode = oldmode & ~PCA9685_MODE2_OUTDRV;
   }
-  wiringPiI2CWriteReg8(FD, PCA9685_MODE2, newmode);
+  wiringPiI2CWriteReg8(i2c_fd_, PCA9685_MODE2, newmode);
   return;
 }
 
@@ -123,15 +155,14 @@ void PCA9685_setOutputMode(int FD, bool totempole) {
 /*
  * Sets the PWM output of one of the PCA9685 pins
  * Parameter:
- *   FD:     [Input] I2C file descrpitor
  *   PinNum: [Input] PWM pin number, from 0 to 15
  *   on:     [Input] At what point in the 4096-part cycle to turn the PWM output ON
  *   off:    [Input] At what point in the 4096-part cycle to turn the PWM output OFF
  * Return: None
  */
-void PCA9685_setPWM(int FD, uint8_t PinNum, uint16_t on, uint16_t off) {
-  wiringPiI2CWriteReg16(FD, PCA9685_LED0_ON_L + 4 * PinNum, on);
-  wiringPiI2CWriteReg16(FD, PCA9685_LED0_ON_L + 4 * PinNum + 2, off);
+void PCA9685_setPWM( uint8_t PinNum, uint16_t on, uint16_t off) {
+  wiringPiI2CWriteReg16(i2c_fd_, PCA9685_LED0_ON_L + 4 * PinNum, on);
+  wiringPiI2CWriteReg16(i2c_fd_, PCA9685_LED0_ON_L + 4 * PinNum + 2, off);
   return;
 }
 
@@ -142,24 +173,23 @@ void PCA9685_setPWM(int FD, uint8_t PinNum, uint16_t on, uint16_t off) {
  * completely on.
 
  * Parameter:
- *   FD:        [Input] I2C file descrpitor
  *   PinNum:    [Input] PWM pin number, from 0 to 15
  *   PWMval:    [Input] The number of ticks out of 4096 to be active, should be
  *                      a value from 0 to 4095 inclusive.
  * Return: None
  */
-void PCA9685_setPinPWM(int FD, uint8_t PinNum, uint16_t PWMval) {
+void PCA9685_setPinPWM( uint8_t PinNum, uint16_t PWMval) {
   /* Clamp value between 0 and 4095 inclusive. */
   if (PWMval > 4095) PWMval = 4095;
 
   if (PWMval == 4095) {
     /* Special value for signal fully on. */
-    PCA9685_setPWM(FD, PinNum, 4096, 0);
+    PCA9685_setPWM( PinNum, 4096, 0);
   } else if (PWMval == 0) {
     /* Special value for signal fully off. */
-    PCA9685_setPWM(FD, PinNum, 0, 4096);
+    PCA9685_setPWM( PinNum, 0, 4096);
   } else {
-    PCA9685_setPWM(FD, PinNum, 0, PWMval);
+    PCA9685_setPWM( PinNum, 0, PWMval);
   }
   return;
 }
