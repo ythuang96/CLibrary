@@ -23,6 +23,8 @@ static struct epoll_event * server_events_monitored_ptr_;
 
 /* message queues for the server */
 static tcpmessagering_t server_message_in_ring_, server_message_out_ring_;
+/* message queues for the client */
+static tcpmessagering_t client_message_in_ring_, client_message_out_ring_;
 
 
 /************ Static Functions Limited to Access within this File ************/
@@ -40,27 +42,22 @@ static void tcp_add_message( tcpmessagering_t *ring_ptr, \
  * Arguments:
  *   server_addr:     [Input] string for server address
  *   port:            [Input] TCP port number
- *   min_client_addr: [Input] The smallest 4th octents of all clients
- *   max_client_addr: [Input] The largest  4th octents of all clients
- *   message_size:    [Input] Maximum character counts for TCP messages
- *   ring_size:       [Input] Maximum messages to hold in queue for processing
  *   update_freq:     [Input] Update freqeuncy of TCP
  * Return None
  */
-void tcp_lib_init(char* server_addr, int port, int min_client_addr, int max_client_addr, \
-  double update_freq ) {
+void tcp_lib_init(char* server_addr, int port, double update_freq ) {
 
+  /* Set the static paramerters */
   server_addr_ = server_addr;
   port_        = port;
-
-  min_client_addr_ = min_client_addr;
-  max_client_addr_ = max_client_addr;
-  num_clients_     = max_client_addr_ - min_client_addr_ + 1;
-
   update_freq_  = update_freq;
 
+  /* Initalize the message rings for the server */
   tcp_ring_init( &server_message_in_ring_  );
   tcp_ring_init( &server_message_out_ring_ );
+  /* Initalize the message rings for the client */
+  tcp_ring_init( &client_message_in_ring_  );
+  tcp_ring_init( &client_message_out_ring_ );
 
   return;
 }
@@ -68,15 +65,23 @@ void tcp_lib_init(char* server_addr, int port, int min_client_addr, int max_clie
 
 /*
  * Setup server side for TCP
- * Arguments: None
+ * Arguments:
+ *   min_client_addr: [Input] The smallest 4th octents of all clients
+ *   max_client_addr: [Input] The largest  4th octents of all clients
  * Return:
  *    0: if setup successful
  *   -1: if setup failed
  */
-int tcp_server_setup( void ) {
+int tcp_server_setup( int min_client_addr, int max_client_addr ) {
   int opt = 1;
   int i;
   struct sockaddr_in address;
+
+
+  /* min and max client address, and the total number of clients */
+  min_client_addr_ = min_client_addr;
+  max_client_addr_ = max_client_addr;
+  num_clients_     = max_client_addr_ - min_client_addr_ + 1;
 
 
   /* allocate server_events_monitored_ptr_ */
@@ -235,7 +240,7 @@ int tcp_server_monitor( void ) {
       if ( bytes_read == 0) {
         /* If valread is 0, then the client disconnected, get details and print */
         getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
-        printf("Host disconnected , ip %s , port %d \n" ,
+        printf("Client disconnected , ip %s , port %d \n" ,
               inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
         /* Remove the client socket from server_events_monitored_ptr_, and close the socket */

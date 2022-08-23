@@ -68,10 +68,9 @@ void nsleep(uint64_t ns);
 int current_time(void);
 
 /********************************* CLib_TCP.c *********************************/
-void tcp_lib_init(char* server_addr, int port, int min_client_addr, int max_client_addr, \
-  double update_freq );
+void tcp_lib_init(char* server_addr, int port, double update_freq );
 
-int tcp_server_setup( void );
+int tcp_server_setup( int min_client_addr, int max_client_addr );
 int tcp_server_monitor( void );
 void tcp_server_cleanup( void );
 
