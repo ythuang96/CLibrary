@@ -293,6 +293,42 @@ void tcp_server_cleanup( void ) {
 
 
 /*
+ * Process one message in the input message ring of the server
+ *
+ * Arguments
+ *   processing_func_ptr: [Input]
+ *                        pointer to the function that is used for processsing,
+ *                        this function should take (tcpmessage_t *) as an input
+ *                        this function will be executed once with the first element in the ring as the input
+ *   emptyring_func_ptr:  [Input]
+ *                        pointer to the function that is used if the ring is empty
+ *                        this pointer can be NULL if you don't want anything done on a empty ring
+ *
+ * Return: None
+ */
+void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
+  if ( server_message_in_ring_.ptr_processing == server_message_in_ring_.ptr_new ) {
+    /* if ptr_processing and ptr_new is the same, then the ring is empty and
+     * call the function *emptyring_func_ptr if it is not a NULL pointer */
+    if (emptyring_func_ptr) (*emptyring_func_ptr)();
+    return;
+  }
+  else { /* if the ring is not empty */
+    /* process the first non-empty element in the ring */
+    (*processing_func_ptr)( server_message_in_ring_.ptr_processing );
+    /* clear the proccessed message */
+    tcp_clear_message( server_message_in_ring_.ptr_processing );
+    /* increment the proccessing pointer */
+    tcp_increment_ring_ptr_processing( &server_message_in_ring_ );
+  }
+  return;
+}
+
+
+/*
+
+
+/*
  * Initialize a tcp message ring
  *
  * Arguments:
@@ -383,39 +419,6 @@ void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr ) {
     fprintf(error_log_, "Ring full, entire ring cleared, data lose occured!\n");
   }
 
-  return;
-}
-
-
-/*
- * Process one message in the input message ring of the server
- *
- * Arguments
- *   processing_func_ptr: [Input]
- *                        pointer to the function that is used for processsing,
- *                        this function should take (tcpmessage_t *) as an input
- *                        this function will be executed once with the first element in the ring as the input
- *   emptyring_func_ptr:  [Input]
- *                        pointer to the function that is used if the ring is empty
- *                        this pointer can be NULL if you don't want anything done on a empty ring
- *
- * Return: None
- */
-void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
-  if ( server_message_in_ring_.ptr_processing == server_message_in_ring_.ptr_new ) {
-    /* if ptr_processing and ptr_new is the same, then the ring is empty and
-     * call the function *emptyring_func_ptr if it is not a NULL pointer */
-    if (emptyring_func_ptr) (*emptyring_func_ptr)();
-    return;
-  }
-  else { /* if the ring is not empty */
-    /* process the first non-empty element in the ring */
-    (*processing_func_ptr)( server_message_in_ring_.ptr_processing );
-    /* clear the proccessed message */
-    tcp_clear_message( server_message_in_ring_.ptr_processing );
-    /* increment the proccessing pointer */
-    tcp_increment_ring_ptr_processing( &server_message_in_ring_ );
-  }
   return;
 }
 
