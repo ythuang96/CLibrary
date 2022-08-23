@@ -326,6 +326,57 @@ void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), vo
 
 
 /*
+ * Send all messages in the outbound message queue of the server
+ * Arguments: None
+ * Return   : None
+ */
+void tcp_server_send_message( void ) {
+  int array_position;
+  /* temp socket descriptor */
+  int sd;
+
+  /* keep sending message as long as the ring is not empty */
+  while ( server_message_out_ring_.ptr_processing != server_message_out_ring_.ptr_new ) {
+    /* find the array position based on the last IP digit of the destination IP address */
+    array_position = last_ip_digit(server_message_out_ring_.ptr_processing->source_ip)-min_client_addr_+1;
+    /* get the socket descriptor from the monitored array */
+    sd = (server_events_monitored_ptr_ + array_position)->data.fd;
+    if ( sd == -1 ) {
+      /* if the desgination IP address is not a connected client, print error message and ignore this message */
+      print_time();
+      fprintf(error_log_, "Message sending failure, IP Address: %s is not connected, message is: %s\n", \
+        server_message_out_ring_.ptr_processing->source_ip, server_message_out_ring_.ptr_processing->message);
+    }
+    else{
+      /* otherwise, send the message to the client */
+      send(sd , server_message_out_ring_.ptr_processing->message, TCPBUFFERSIZE, 0 );
+    }
+
+    /* clear the proccessed message */
+    tcp_clear_message( server_message_out_ring_.ptr_processing );
+    /* increment the proccessing pointer */
+    tcp_increment_ring_ptr_processing( &server_message_out_ring_ );
+  }
+  return;
+}
+
+
+/*
+ * Add one message to the outbound message queue of the server
+ * Arguments
+ *   message:        [Input]
+ *                   string to put as the message
+ *                   messages with more than TCPBUFFERSIZE-1 characters will have the end discarded
+ *   destination_ip: [Input]
+ *                   string to put as the destination ip address for this new message
+ *                   string with more than IPADDRSIZE-1 characters will have the end discarded
+ *
+ * Return: None
+ */
+void tcp_server_add_message_sendqueue( char message[TCPBUFFERSIZE], char destination_ip[IPADDRSIZE] ) {
+  tcp_add_message( &server_message_out_ring_, message, destination_ip);
+  return;
+}
 
 
 /*

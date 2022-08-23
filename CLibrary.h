@@ -76,6 +76,8 @@ int tcp_server_monitor( void );
 void tcp_server_cleanup( void );
 
 void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) );
+void tcp_server_send_message( void );
+void tcp_server_add_message_sendqueue( char message[TCPBUFFERSIZE], char destination_ip[IPADDRSIZE] );
 
 
 #endif
