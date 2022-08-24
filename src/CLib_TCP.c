@@ -3,7 +3,7 @@
 
 /************ Static Variables Available in and only in this file ************/
 /* IP setting for this TCP instance */
-static char* server_addr_;   /* TCP server address               */
+static char* server_ipaddr_; /* TCP server IP address            */
 static int port_;            /* TCP port number                  */
 
 /* All clients should have the same first 3 octents, example: 192.168.1.XXX */
@@ -16,9 +16,18 @@ static double update_freq_; /* Update freqeuncy of TCP */
 
 /* server socket */
 static int server_socket_;
-/* epoll stuff   */
+/* epoll stuff */
 static int server_epoll_fd_;
 static struct epoll_event * server_events_monitored_ptr_;
+
+/* server address, used by the client */
+struct sockaddr_in serv_addr_;
+
+/* client socket */
+static int client_socket_;
+/* epoll stuff */
+static int client_epoll_fd_;
+static struct epoll_event client_events_monitored_;
 
 
 /* message queues for the server */
@@ -34,6 +43,8 @@ static void tcp_increment_ring_ptr_processing( tcpmessagering_t *ring_ptr );
 static void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr );
 static void tcp_add_message( tcpmessagering_t *ring_ptr, \
   char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]);
+static void tcp_process_message( tcpmessagering_t *ring_ptr, \
+  void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) );
 
 
 
@@ -48,9 +59,9 @@ static void tcp_add_message( tcpmessagering_t *ring_ptr, \
 void tcp_lib_init(char* server_addr, int port, double update_freq ) {
 
   /* Set the static paramerters */
-  server_addr_ = server_addr;
-  port_        = port;
-  update_freq_  = update_freq;
+  server_ipaddr_ = server_addr;
+  port_          = port;
+  update_freq_   = update_freq;
 
   /* Initalize the message rings for the server */
   tcp_ring_init( &server_message_in_ring_  );
@@ -185,7 +196,7 @@ int tcp_server_monitor( void ) {
   active_events_ptr = (struct epoll_event*) calloc(num_clients_+1, sizeof(struct epoll_event));
   if (active_events_ptr == NULL) {
     fprintf(stderr, "Out of memory!\n");
-    exit(1);
+    exit(-1);
   }
 
   /**************************** Monitor Activity ******************************/
@@ -312,20 +323,7 @@ void tcp_server_cleanup( void ) {
  * Return: None
  */
 void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
-  if ( server_message_in_ring_.ptr_processing == server_message_in_ring_.ptr_new ) {
-    /* if ptr_processing and ptr_new is the same, then the ring is empty and
-     * call the function *emptyring_func_ptr if it is not a NULL pointer */
-    if (emptyring_func_ptr) (*emptyring_func_ptr)();
-    return;
-  }
-  else { /* if the ring is not empty */
-    /* process the first non-empty element in the ring */
-    (*processing_func_ptr)( server_message_in_ring_.ptr_processing );
-    /* clear the proccessed message */
-    tcp_clear_message( server_message_in_ring_.ptr_processing );
-    /* increment the proccessing pointer */
-    tcp_increment_ring_ptr_processing( &server_message_in_ring_ );
-  }
+  tcp_process_message( &server_message_in_ring_, processing_func_ptr, emptyring_func_ptr );
   return;
 }
 
@@ -382,6 +380,198 @@ void tcp_server_add_message_sendqueue( char message[TCPBUFFERSIZE], char destina
   tcp_add_message( &server_message_out_ring_, message, destination_ip);
   return;
 }
+
+
+
+
+/*
+ * Setup client side for TCP
+ * Arguments: None
+ * Return:
+ *    0: if setup successful
+ *   -1: if setup failed
+ */
+int tcp_client_setup( void ) {
+  /* setup serv_addr struct with IP and port */
+  bzero(&serv_addr_, sizeof(serv_addr_));
+  serv_addr_.sin_family = AF_INET;
+  serv_addr_.sin_port = htons(port_);
+  /* Convert IPv4 addresses from text to binary form */
+  serv_addr_.sin_addr.s_addr = inet_addr(server_ipaddr_);
+
+  /* Create a client socket
+   * AF_INET for IPV4, SOCK_STREAM for TCP, 0 for default protocol
+   * Creates a socket descriptor: client_socket_ */
+  if ((client_socket_ = socket(AF_INET, SOCK_STREAM, 0)) < 0) return -1;
+
+  /* Create epoll file descriptor */
+  if ( (client_epoll_fd_ = epoll_create1(0)) == -1) return -1;
+
+  return 0;
+}
+
+
+/*
+ * Attempt to reconncet to the server, should run within a loop than checks for the state_
+ * Arguments: None
+ * Return   :  0 on success
+ *            -1 if server not yet online
+ *            -2 on error
+ */
+int tcp_client_reconnect( void ) {
+  /* Connect the socket descriptor: client_socket_ to the server address
+   * returns 0 on success, return -1 if failed, indicating the server is not
+   * yet online. We will keep trying to connect to the server until
+   * connection is established or the state_ turns to exiting */
+  if (connect(client_socket_, (struct sockaddr*)&serv_addr_, sizeof(serv_addr_)) < 0) {
+    nsleep(1000000000/update_freq_);
+    return -1;
+  }
+  /* Else the connection was established */
+  else {
+    print_time();
+    fprintf(error_log_, "Connected to server!\n");
+
+    /* Add server_socket_ to epoll monitor */
+    client_events_monitored_.events = EPOLLIN; /* watch for input events */
+    client_events_monitored_.data.fd = client_socket_;
+    if(epoll_ctl(client_epoll_fd_, EPOLL_CTL_ADD, client_socket_, &client_events_monitored_)) {
+      close(client_epoll_fd_);
+      return -2;
+    }
+    return 0;
+  }
+}
+
+
+/*
+ * Montior TCP comm from the client side, run this continuously in a loop
+ * Arguments: None
+ * Return:
+ *    0: on success
+ *   -1: if server disconnected
+ */
+int tcp_client_monitor( void ) {
+  struct epoll_event active_events;
+  int event_count, bytes_read;
+
+  char buffer[TCPBUFFERSIZE];
+
+
+  /**************************** Monitor Activity ******************************/
+  /* Wait for an activity on one of the sockets, timeout is set to update at
+   * update_freq_ */
+  event_count = epoll_wait(client_epoll_fd_, &active_events, 1, round(1000.0/update_freq_));
+  /* If server disconnects or send message, there will be activity*/
+
+
+  /*************************** Deal With Activity *****************************/
+  if ( event_count == 1 ) {
+    /* Clear buffer first */
+    memset( buffer, '\0', sizeof(buffer) );
+
+    /* Read incomming message and store in buffer,
+     * and return the number of bytes read to bytes_read */
+    bytes_read = read( client_socket_ , buffer, TCPBUFFERSIZE );
+
+    if ( bytes_read == 0) {
+      /* If valread is 0, then the server disconnected. */
+      print_time();
+      fprintf(error_log_, "Server disconnected.\n");
+
+      /* Remove the client socket from client_events_monitored_, and do not close the socket */
+      client_events_monitored_.data.fd = -1;
+      epoll_ctl(client_epoll_fd_, EPOLL_CTL_DEL, client_socket_, &client_events_monitored_);
+
+      /* clean up, close socket (needs to be reset before attempting to reconnect)
+       * close epoll */
+      tcp_client_cleanup( );
+
+      return -1;
+    }
+
+    else {
+      /* Else, a message is sent from the server
+       * Add message and server IP to the TCP message ring. */
+      tcp_add_message( &client_message_in_ring_, buffer, server_ipaddr_ );
+    }
+
+  }
+  return 0;
+}
+
+
+/*
+ * Cleanup TCP comm from the client side, close the client_socket_ and the
+ * epoll file descriptor
+ * Arguments: None
+ * Return: None
+ */
+void tcp_client_cleanup( void ) {
+  /* closing the client socket */
+  close(client_socket_);
+  /* closing the epoll file descriptor */
+  close(client_epoll_fd_);
+
+  return;
+}
+
+
+/*
+ * Process one message in the input message ring of the client
+ *
+ * Arguments
+ *   processing_func_ptr: [Input]
+ *                        pointer to the function that is used for processsing,
+ *                        this function should take (tcpmessage_t *) as an input
+ *                        this function will be executed once with the first element in the ring as the input
+ *   emptyring_func_ptr:  [Input]
+ *                        pointer to the function that is used if the ring is empty
+ *                        this pointer can be NULL if you don't want anything done on a empty ring
+ *
+ * Return: None
+ */
+void tcp_client_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
+  tcp_process_message( &client_message_in_ring_, processing_func_ptr, emptyring_func_ptr );
+  return;
+}
+
+
+/*
+ * Send all messages in the outbound message queue of the server
+ * Arguments: None
+ * Return   : None
+ */
+void tcp_client_send_message( void ) {
+  /* keep sending message as long as the ring is not empty */
+  while ( client_message_out_ring_.ptr_processing != client_message_out_ring_.ptr_new ) {
+    /* otherwise, send the message to the client */
+    send(client_socket_ , client_message_out_ring_.ptr_processing->message, TCPBUFFERSIZE, 0 );
+
+    /* clear the proccessed message */
+    tcp_clear_message( client_message_out_ring_.ptr_processing );
+    /* increment the proccessing pointer */
+    tcp_increment_ring_ptr_processing( &client_message_out_ring_ );
+  }
+  return;
+}
+
+
+/*
+ * Add one message to the outbound message queue of the client
+ * Arguments
+ *   message:        [Input]
+ *                   string to put as the message
+ *                   messages with more than TCPBUFFERSIZE-1 characters will have the end discarded
+ *
+ * Return: None
+ */
+void tcp_client_add_message_sendqueue( char message[TCPBUFFERSIZE] ) {
+  tcp_add_message( &client_message_out_ring_, message, server_ipaddr_ );
+  return;
+}
+
+
 
 
 /*
@@ -510,5 +700,40 @@ void tcp_add_message( tcpmessagering_t *ring_ptr, \
   /* Increment ptr_new */
   tcp_increment_ring_ptr_new( ring_ptr );
 
+  return;
+}
+
+
+/*
+ * Process one message in the message ring
+ *
+ * Arguments
+ *   ring_ptr:            [Input]
+ *                        pointer to the ring to be processed
+ *   processing_func_ptr: [Input]
+ *                        pointer to the function that is used for processsing,
+ *                        this function should take (tcpmessage_t *) as an input
+ *                        this function will be executed once with the first element in the ring as the input
+ *   emptyring_func_ptr:  [Input]
+ *                        pointer to the function that is used if the ring is empty
+ *                        this pointer can be NULL if you don't want anything done on a empty ring
+ *
+ * Return: None
+ */
+void tcp_process_message( tcpmessagering_t *ring_ptr, void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) ) {
+  if ( ring_ptr->ptr_processing == ring_ptr->ptr_new ) {
+    /* if ptr_processing and ptr_new is the same, then the ring is empty and
+     * call the function *emptyring_func_ptr if it is not a NULL pointer */
+    if (emptyring_func_ptr) (*emptyring_func_ptr)();
+    return;
+  }
+  else { /* if the ring is not empty */
+    /* process the first non-empty element in the ring */
+    (*processing_func_ptr)( ring_ptr->ptr_processing );
+    /* clear the proccessed message */
+    tcp_clear_message( ring_ptr->ptr_processing );
+    /* increment the proccessing pointer */
+    tcp_increment_ring_ptr_processing( ring_ptr );
+  }
   return;
 }
