@@ -76,7 +76,7 @@ void tcp_server_cleanup( void );
 
 void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) );
 void tcp_server_send_message( void );
-void tcp_server_add_message_sendqueue( char message[TCPBUFFERSIZE], char destination_ip[IPADDRSIZE] );
+void tcp_server_add_message_sendqueue( char* message_ptr, char* destination_ip_ptr );
 
 int tcp_client_setup( void );
 int tcp_client_reconnect( void );
@@ -85,7 +85,7 @@ void tcp_client_cleanup( void );
 
 void tcp_client_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) );
 void tcp_client_send_message( void );
-void tcp_client_add_message_sendqueue( char message[TCPBUFFERSIZE] );
+void tcp_client_add_message_sendqueue( char* message_ptr );
 
 
 #endif

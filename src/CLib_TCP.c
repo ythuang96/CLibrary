@@ -41,8 +41,7 @@ static void tcp_ring_init( tcpmessagering_t *ring_ptr );
 static void tcp_clear_message( tcpmessage_t *message_ptr );
 static void tcp_increment_ring_ptr_processing( tcpmessagering_t *ring_ptr );
 static void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr );
-static void tcp_add_message( tcpmessagering_t *ring_ptr, \
-  char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]);
+static void tcp_add_message( tcpmessagering_t *ring_ptr, char* message_ptr, char* source_ip_ptr);
 static void tcp_process_message( tcpmessagering_t *ring_ptr, \
   void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) );
 
@@ -376,8 +375,8 @@ void tcp_server_send_message( void ) {
  *
  * Return: None
  */
-void tcp_server_add_message_sendqueue( char message[TCPBUFFERSIZE], char destination_ip[IPADDRSIZE] ) {
-  tcp_add_message( &server_message_out_ring_, message, destination_ip);
+void tcp_server_add_message_sendqueue( char* message_ptr, char* destination_ip_ptr ) {
+  tcp_add_message( &server_message_out_ring_, message_ptr, destination_ip_ptr);
   return;
 }
 
@@ -568,8 +567,8 @@ void tcp_client_send_message( void ) {
  *
  * Return: None
  */
-void tcp_client_add_message_sendqueue( char message[TCPBUFFERSIZE] ) {
-  tcp_add_message( &client_message_out_ring_, message, server_ipaddr_ );
+void tcp_client_add_message_sendqueue( char* message_ptr ) {
+  tcp_add_message( &client_message_out_ring_, message_ptr, server_ipaddr_ );
   return;
 }
 
@@ -686,18 +685,16 @@ void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr ) {
  *
  * Return: None
  */
-void tcp_add_message( tcpmessagering_t *ring_ptr, \
-  char message[TCPBUFFERSIZE], char source_ip[IPADDRSIZE]) {
+void tcp_add_message( tcpmessagering_t *ring_ptr, char* message_ptr, char* source_ip_ptr) {
   /* First clear the address */
   tcp_clear_message( ring_ptr->ptr_new );
 
   /* write to the ring */
-  strncpy( ring_ptr->ptr_new->message  , message  , TCPBUFFERSIZE );
-  strncpy( ring_ptr->ptr_new->source_ip, source_ip, IPADDRSIZE    );
-  /* Note that NULL termination is automatic, since message and source_ip are
-   * always set with NULL before this operation, and we only copy size-1
-   * characters, which will ensure that at least the last character will always
-   * be NULL. */
+  strncpy( ring_ptr->ptr_new->message  , message_ptr  , TCPBUFFERSIZE );
+  strncpy( ring_ptr->ptr_new->source_ip, source_ip_ptr, IPADDRSIZE    );
+  /* Ensure Null Terminate */
+  ring_ptr->ptr_new->message[TCPBUFFERSIZE - 1] = '\0';
+  ring_ptr->ptr_new->source_ip[IPADDRSIZE - 1] = '\0';
 
   /* Increment ptr_new */
   tcp_increment_ring_ptr_new( ring_ptr );
