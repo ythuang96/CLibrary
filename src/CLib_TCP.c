@@ -244,9 +244,10 @@ int tcp_server_monitor( void ) {
       memset( buffer, '\0', sizeof(buffer) );
 
       /* Read incomming message and store in buffer,
-       * and return the number of bytes read to bytes_read,
-       * the TCPBUFFERSIZE-1 is there to leave one extra space for NULL termination */
-      bytes_read = read( sd , buffer, TCPBUFFERSIZE-1 );
+       * and return the number of bytes read to bytes_read */
+      bytes_read = read( sd , buffer, TCPBUFFERSIZE );
+      /* Ensure NULL Terminate */
+      buffer[TCPBUFFERSIZE-1] = '\0';
 
       if ( bytes_read == 0) {
         /* If valread is 0, then the client disconnected, get details and print */
@@ -267,8 +268,7 @@ int tcp_server_monitor( void ) {
         getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
 
         /* Add message and sender IP to the TCP message ring.
-         * Note that Buffer is already NULL terminated,
-         * due to the memset and TCPBUFFERSIZE-1 in previous code */
+         * Note that Buffer is already NULL terminated */
         tcp_add_message( &server_message_in_ring_, buffer, inet_ntoa(address.sin_addr) );
       }
     }
@@ -473,6 +473,8 @@ int tcp_client_monitor( void ) {
     /* Read incomming message and store in buffer,
      * and return the number of bytes read to bytes_read */
     bytes_read = read( client_socket_ , buffer, TCPBUFFERSIZE );
+    /* Ensure NULL Terminate */
+    buffer[TCPBUFFERSIZE-1] = '\0';
 
     if ( bytes_read == 0) {
       /* If valread is 0, then the server disconnected. */
@@ -690,8 +692,8 @@ void tcp_add_message( tcpmessagering_t *ring_ptr, \
   tcp_clear_message( ring_ptr->ptr_new );
 
   /* write to the ring */
-  strncpy( ring_ptr->ptr_new->message  , message  , TCPBUFFERSIZE-1 );
-  strncpy( ring_ptr->ptr_new->source_ip, source_ip, IPADDRSIZE-1    );
+  strncpy( ring_ptr->ptr_new->message  , message  , TCPBUFFERSIZE );
+  strncpy( ring_ptr->ptr_new->source_ip, source_ip, IPADDRSIZE    );
   /* Note that NULL termination is automatic, since message and source_ip are
    * always set with NULL before this operation, and we only copy size-1
    * characters, which will ensure that at least the last character will always
