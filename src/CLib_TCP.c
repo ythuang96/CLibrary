@@ -36,6 +36,10 @@ static tcpmessagering_t server_message_in_ring_, server_message_out_ring_;
 static tcpmessagering_t client_message_in_ring_, client_message_out_ring_;
 
 
+/* Counter for number of connected clients */
+static int connected_client_couter_;
+
+
 /************ Static Functions Limited to Access within this File ************/
 static void tcp_ring_init( tcpmessagering_t *ring_ptr );
 static void tcp_clear_message( tcpmessage_t *message_ptr );
@@ -160,6 +164,9 @@ int tcp_server_setup( int min_client_addr, int max_client_addr ) {
     (server_events_monitored_ptr_ + i)->data.fd = -1;
   }
 
+  /* Initialize connected client counter to 0 */
+  connected_client_couter_ = 0;
+
   return 0;
 }
 
@@ -168,8 +175,8 @@ int tcp_server_setup( int min_client_addr, int max_client_addr ) {
  * Montior TCP comm from the server side, run this continuously in a loop
  * Arguments: None
  * Return:
- *    0: on success
- *   -1: on failure
+ *   on success: number of connected clients
+ *   on failure: -1
  */
 int tcp_server_monitor( void ) {
   int event_count, i;
@@ -233,6 +240,9 @@ int tcp_server_monitor( void ) {
       (server_events_monitored_ptr_ + array_position)->events = EPOLLIN; /* watch for input events */
       (server_events_monitored_ptr_ + array_position)->data.fd = new_socket;
       epoll_ctl(server_epoll_fd_, EPOLL_CTL_ADD, new_socket, (server_events_monitored_ptr_ + array_position));
+
+      /* Increment connected client counter */
+      connected_client_couter_ += 1;
     }
     else {
       /**************************** IO By Client ******************************/
@@ -259,6 +269,9 @@ int tcp_server_monitor( void ) {
         (server_events_monitored_ptr_ + array_position)->data.fd = -1;
         epoll_ctl(server_epoll_fd_, EPOLL_CTL_DEL, sd, (server_events_monitored_ptr_ + array_position));
         close( sd );
+
+        /* Decrement connected client counter */
+        connected_client_couter_ -= 1;
       }
 
       /* Else, a message is sent from the clinet */
@@ -274,7 +287,7 @@ int tcp_server_monitor( void ) {
   }
 
   free( active_events_ptr );
-  return 0;
+  return connected_client_couter_;
 }
 
 
