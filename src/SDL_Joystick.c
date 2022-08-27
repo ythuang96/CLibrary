@@ -8,12 +8,13 @@ static SDL_Event event_;
 static int n_axis_, n_button_;
 static double long_press_sec_;
 
-static int *axis_name_, *axis_max_, *axis_min_, *axis_dz_;
+static int *axis_name_, *axis_max_, *axis_min_, *axis_dz_, *axis_inv_;
 static int *button_name_;
 static clock_t *button_press_time_;
 
 
-static double axis_value_2_double( int axis_value, int axis_min, int axis_max, int axis_dz );
+static double axis_value_2_double( int axis_value, int axis_min, int axis_max, \
+  int axis_dz, int axis_inv );
 
 
 
@@ -72,10 +73,14 @@ int Joystick_Init( int device_num, int n_axis, int n_button ) {
  *              the maximum value for each axis, should be in the same order axis_name
  *   axis_dz:   [Input, array size n_axis]
  *              the deadzone value for each axis, should be in the same order axis_name
+ *   axis_inv:  [Input, array size n_axis]
+ *              the inversion value for each axis, should be in the same order axis_name
+ *              1 for no inversion and -1 for invert axis
  * Return
  *   None
  */
-void Joystick_Init_Axis( const int *axis_name, const int *axis_min, const int *axis_max, const int *axis_dz ){
+void Joystick_Init_Axis( const int *axis_name, const int *axis_min, const int *axis_max, \
+  const int *axis_dz, const int* axis_inv){
   int ii;
 
   /* allocate static array */
@@ -83,6 +88,7 @@ void Joystick_Init_Axis( const int *axis_name, const int *axis_min, const int *a
   axis_max_  = (int *) calloc(n_axis_, sizeof(int));
   axis_min_  = (int *) calloc(n_axis_, sizeof(int));
   axis_dz_   = (int *) calloc(n_axis_, sizeof(int));
+  axis_inv_  = (int *) calloc(n_axis_, sizeof(int));
 
   /* copy the values to the static arrays */
   for ( ii = 0; ii < n_axis_; ii++ ) {
@@ -90,6 +96,7 @@ void Joystick_Init_Axis( const int *axis_name, const int *axis_min, const int *a
     *(axis_max_  + ii) = *(axis_max  + ii);
     *(axis_min_  + ii) = *(axis_min  + ii);
     *(axis_dz_   + ii) = *(axis_dz   + ii);
+    *(axis_inv_  + ii) = *(axis_inv  + ii);
   }
 
   return;
@@ -184,7 +191,8 @@ void Joystick_Monitor( double *axis_value, int *button_value ) {
         if ( event_.jaxis.axis == *(axis_name_ + ii) ) {
           /* record the motion value */
           *(axis_value + ii) = \
-            axis_value_2_double( event_.jaxis.value, *(axis_min_ + ii), *(axis_max_ + ii), *(axis_dz_ + ii) );
+            axis_value_2_double( event_.jaxis.value, \
+            *(axis_min_ + ii), *(axis_max_ + ii), *(axis_dz_ + ii), *(axis_inv_ + ii) );
         }
       }
     }
@@ -238,6 +246,7 @@ void Joystick_Cleanup( void ) {
   free(axis_max_   );
   free(axis_min_   );
   free(axis_dz_    );
+  free(axis_inv_   );
   free(button_name_);
   free(button_press_time_);
 
@@ -258,10 +267,11 @@ void Joystick_Cleanup( void ) {
  *   axis_min  : [Input] minimum integer axis value from the joystick
  *   axis_max  : [Input] maximum integer axis value from the joystick
  *   axix_dz   : [Input] integer axis value for the deadzone
+ *   axix_inv  : [Input] integer axis value for the inversion, +1 for no inversion and -1 for invert axis
  * Return
  *   double number between -1 and 1
  */
-double axis_value_2_double( int axis_value, int axis_min, int axis_max, int axis_dz ) {
+double axis_value_2_double( int axis_value, int axis_min, int axis_max, int axis_dz, int axis_inv ) {
   double result;
 
   /* Within dead zone */
@@ -289,5 +299,5 @@ double axis_value_2_double( int axis_value, int axis_min, int axis_max, int axis
     }
   }
 
-  return result;
+  return ((double) axis_inv)*result;
 }
