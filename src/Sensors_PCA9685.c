@@ -193,3 +193,15 @@ void PCA9685_setPinPWM( uint8_t PinNum, uint16_t PWMval) {
   }
   return;
 }
+
+
+void PCA9685_cleanup( void ) {
+  int ii;
+
+  /* set all pins to 0 */
+  for ( ii = 0; ii < 16; ii ++ ) {
+    PCA9685_setPinPWM( ii, 0);
+  }
+
+  return;
+}
