@@ -232,7 +232,8 @@ int tcp_server_monitor( void ) {
       }
 
       /* Print new connection information */
-      printf("New connection , socket fd is %d , ip is : %s , port : %d\n" , \
+      print_time();
+      fprintf(error_log_,"New connection , socket fd is %d , ip is : %s , port : %d\n" , \
         new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
       /* Add new socket to be monitors */
@@ -261,7 +262,8 @@ int tcp_server_monitor( void ) {
       if ( bytes_read == 0) {
         /* If valread is 0, then the client disconnected, get details and print */
         getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
-        printf("Client disconnected , ip %s , port %d \n" ,
+        print_time();
+        fprintf(error_log_, "Client disconnected , ip %s , port %d \n" ,
               inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
         /* Remove the client socket from server_events_monitored_ptr_, and close the socket */
