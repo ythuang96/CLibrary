@@ -188,7 +188,10 @@ void Joystick_Display_Action( void ) {
     else if ( event_.type == SDL_JOYBUTTONDOWN) {
       printf("Button pressed on number: %d\n", event_.jbutton.button );
     }
-
+    /* If joystick button release */
+    else if ( event_.type == SDL_JOYBUTTONUP ) {
+      printf("Button released on number: %d\n", event_.jbutton.button );
+    }
   }
   return;
 }
