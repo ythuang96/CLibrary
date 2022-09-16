@@ -6,11 +6,11 @@ static SDL_Joystick *joystick_ = NULL;
 static SDL_Event event_;
 
 static int n_axis_, n_button_sl_, n_button_sh_;
-static double long_press_sec_;
+static double long_press_sec_, hold_sec_;
 
 static int *axis_name_, *axis_max_, *axis_min_, *axis_dz_, *axis_inv_;
-static int *button_name_sl_;
-static clock_t *button_press_time_sl_;
+static int *button_name_sl_, *button_name_sh_;
+static clock_t *button_press_time_sl_, *button_press_time_sh_;
 
 
 static double axis_value_2_double( int axis_value, int axis_min, int axis_max, \
@@ -107,7 +107,7 @@ void Joystick_Init_Axis( const int *axis_name, const int *axis_min, const int *a
 
 
 /*
- * Intialize joytick buttons
+ * Intialize joytick buttons in single/long press mode
  * Arguments
  *   button_name:      [Input, array size n_button]
  *                     the integer name for each of button to use
@@ -131,6 +131,38 @@ void Joystick_Init_Button_SL( const int *button_name, double long_press_sec){
   /* copy the values to the static array */
   for ( ii = 0; ii < n_button_sl_; ii++ ) {
     *(button_name_sl_ + ii) = *(button_name + ii);
+  }
+  return;
+}
+
+
+/*
+ * Intialize joytick buttons in single press/hold mode
+ * Arguments
+ *   button_name: [Input, array size n_button]
+ *                the integer name for each of button to use
+ *   hold_sec:    [Input]
+ *                the minimum number of seconds for hold,
+ *                pressing longer than this will register as a hold
+ *                pressing shorter than this will register as a single press
+ * Return
+ *   None
+ */
+void Joystick_Init_Button_SH( const int *button_name, double hold_sec){
+  int ii;
+
+
+  hold_sec_ = hold_sec;
+  printf("Hold button length at least: %5.1f sec\n", hold_sec_);
+
+  /* allocate static array */
+  button_name_sh_ = (int *) calloc(n_button_sh_, sizeof(int));
+  /* allocate press time array */
+  button_press_time_sh_ = (clock_t *) calloc(n_button_sh_, sizeof(clock_t));
+
+  /* copy the values to the static array */
+  for ( ii = 0; ii < n_button_sh_; ii++ ) {
+    *(button_name_sh_ + ii) = *(button_name + ii);
   }
   return;
 }
@@ -180,7 +212,7 @@ void Joystick_Display_Action( void ) {
  *   button_value_sh: [Input/Output, array size n_button_sh]
  *                    An array that stores the condition for each button that is
  *                    in short press/hold mode.
- *                    0 for no action, -1 for pressd down, 1 for short press and
+ *                    0 for no action, -1 for pressed down, 1 for short press and
  *                    2 for currently being held down
  *                    This array gets updated every time there is button motion.
  *                    When pressed down, value first changes to -1. If button is
@@ -195,6 +227,22 @@ void Joystick_Display_Action( void ) {
 void Joystick_Monitor( double *axis_value, int *button_value_sl, int *button_value_sh ) {
   int ii;
   double elapsedtime;
+
+  /* loop over each of the initialized buttons for short press/hold mode
+   * to check if the hold_sec_ has expired */
+  for (ii = 0; ii < n_button_sh_; ii++) {
+
+    /* if the button is pressed down but has not gone into hold state */
+    if ( *(button_value_sh + ii) == -1 ) {
+      /* compute the elaspsed time */
+      elapsedtime = (double)(clock() - *(button_press_time_sh_ + ii)) / CLOCKS_PER_SEC;
+      /* if hold_sec_ expired */
+      if (elapsedtime >= hold_sec_) {
+        /* register this button as being held down */
+        *(button_value_sh + ii) = 2;
+      }
+    }
+  }
 
 
   /* Check if there are any events, SDL_PollEvent return 1 if there are events, 0 if no events */
@@ -216,6 +264,7 @@ void Joystick_Monitor( double *axis_value, int *button_value_sl, int *button_val
 
     /* If joystick button press down */
     else if ( event_.type == SDL_JOYBUTTONDOWN) {
+
       /* loop over each of the initialized buttons for short/long press mode */
       for (ii = 0; ii < n_button_sl_; ii++) {
         /* if the button press is the current button */
@@ -224,11 +273,24 @@ void Joystick_Monitor( double *axis_value, int *button_value_sl, int *button_val
           *(button_press_time_sl_ + ii) = clock();
         }
       }
+
+      /* loop over each of the initialized buttons for short press/hold mode */
+      for (ii = 0; ii < n_button_sh_; ii++) {
+        /* if the button press is the current button */
+        if ( event_.jbutton.button == *(button_name_sh_ + ii) ){
+          /* record press time */
+          *(button_press_time_sh_ + ii) = clock();
+          /* change state to -1  to indicate a press down */
+          *(button_value_sh + ii) = -1;
+        }
+      }
+
     }
 
     /* If joystick button release */
     else if ( event_.type == SDL_JOYBUTTONUP ) {
-      /* loop over each of the initialized buttons */
+
+      /* loop over each of the initialized buttons for short/long press mode */
       for (ii = 0; ii < n_button_sl_; ii++) {
         /* if the button released is the current button */
         if ( event_.jbutton.button == *(button_name_sl_ + ii) ){
@@ -245,6 +307,25 @@ void Joystick_Monitor( double *axis_value, int *button_value_sl, int *button_val
           }
         }
       }
+
+      /* loop over each of the initialized buttons for short press/hold mode */
+      for (ii = 0; ii < n_button_sh_; ii++) {
+        /* if the button released is the current button */
+        if ( event_.jbutton.button == *(button_name_sh_ + ii) ){
+
+          /* if the button has not gone into hold state, it is a short press */
+          if ( *(button_value_sh + ii) == -1 ) {
+            /* register this button as a short press */
+            *(button_value_sh + ii) = 1;
+          }
+          /* if the button already gone into hold state, it is released from hold */
+          else if ( *(button_value_sh + ii) == 2 ) {
+            /* register this button as a released from a hold */
+            *(button_value_sh + ii) = 0;
+          }
+        }
+      }
+
     }
 
   } /* end if event */
@@ -266,8 +347,10 @@ void Joystick_Cleanup( void ) {
   free(axis_inv_   );
   free(button_name_sl_);
   free(button_press_time_sl_);
+  free(button_name_sh_);
+  free(button_press_time_sh_);
 
-  /* Close joystick if oopened */
+  /* Close joystick if opened */
   if (SDL_JoystickGetAttached(joystick_)) {
     SDL_JoystickClose(joystick_);
   }
