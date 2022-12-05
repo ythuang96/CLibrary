@@ -61,8 +61,7 @@ static void tcp_clear_ring( tcpmessagering_t *ring_ptr );
 
 
 /************************** Libarary Initialization **************************/
-/*
- * Initialize the libraray with all the settings needed
+/* Initialize the libraray with all the settings needed
  * Arguments:
  *   server_addr:     [Input] string for server address
  *   port:            [Input] TCP port number
@@ -88,8 +87,7 @@ void tcp_lib_init(char* server_addr, int port, double update_freq ) {
 
 
 /*************************** Server Side Functions ***************************/
-/*
- * Setup server side for TCP
+/* Setup server side for TCP
  * Arguments:
  *   min_client_addr: [Input] The smallest 4th octents of all clients
  *   max_client_addr: [Input] The largest  4th octents of all clients
@@ -182,8 +180,7 @@ int tcp_server_setup( int min_client_addr, int max_client_addr ) {
 }
 
 
-/*
- * Montior TCP comm from the server side, run this continuously in a loop
+/* Montior TCP comm from the server side, run this continuously in a loop
  * Arguments: None
  * Return:
  *   on success: number of connected clients
@@ -304,8 +301,7 @@ int tcp_server_monitor( void ) {
 }
 
 
-/*
- * Cleanup TCP comm from the server side, closes the master socket, client
+/* Cleanup TCP comm from the server side, closes the master socket, client
  * sockets and the epoll file descriptor
  * Arguments: None
  * Return: None
@@ -333,8 +329,7 @@ void tcp_server_cleanup( void ) {
 }
 
 
-/*
- * Process one message in the input message ring of the server
+/* Process one message in the input message ring of the server
  *
  * Arguments
  *   processing_func_ptr: [Input]
@@ -353,8 +348,7 @@ void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), vo
 }
 
 
-/*
- * Send all messages in the outbound message queue of the server
+/* Send all messages in the outbound message queue of the server
  * Arguments: None
  * Return   : None
  */
@@ -389,8 +383,7 @@ void tcp_server_send_message( void ) {
 }
 
 
-/*
- * Add one message to the outbound message queue of the server
+/* Add one message to the outbound message queue of the server
  * Arguments
  *   message:        [Input]
  *                   string to put as the message
@@ -408,8 +401,7 @@ void tcp_server_add_message_sendqueue( char* message_ptr, char* destination_ip_p
 
 
 /*************************** Client Side Functions ***************************/
-/*
- * Setup client side for TCP
+/* Setup client side for TCP
  * Arguments: None
  * Return:
  *    0: if setup successful
@@ -435,8 +427,7 @@ int tcp_client_setup( void ) {
 }
 
 
-/*
- * Attempt to reconncet to the server, should run within a loop than checks for the state_
+/* Attempt to reconncet to the server, should run within a loop that checks for the state_
  * Arguments: None
  * Return   :  0 on success
  *            -1 if server not yet online
@@ -468,8 +459,7 @@ int tcp_client_reconnect( void ) {
 }
 
 
-/*
- * Montior TCP comm from the client side, run this continuously in a loop
+/* Montior TCP comm from the client side, run this continuously in a loop
  * Arguments: None
  * Return:
  *    0: on success
@@ -527,8 +517,7 @@ int tcp_client_monitor( void ) {
 }
 
 
-/*
- * Cleanup TCP comm from the client side, close the client_socket_ and the
+/* Cleanup TCP comm from the client side, close the client_socket_ and the
  * epoll file descriptor
  * Arguments: None
  * Return: None
@@ -543,8 +532,7 @@ void tcp_client_cleanup( void ) {
 }
 
 
-/*
- * Process one message in the input message ring of the client
+/* Process one message in the input message ring of the client
  *
  * Arguments
  *   processing_func_ptr: [Input]
@@ -563,8 +551,7 @@ void tcp_client_process_message( void (*processing_func_ptr)(tcpmessage_t *), vo
 }
 
 
-/*
- * Send all messages in the outbound message queue of the server
+/* Send all messages in the outbound message queue of the server
  * Arguments: None
  * Return   : -1 if send failure due to broken pipe (server disconnected)
  *            -2 if send failure due to other errors
@@ -608,8 +595,7 @@ int tcp_client_send_message( void ) {
 }
 
 
-/*
- * Add one message to the outbound message queue of the client
+/* Add one message to the outbound message queue of the client
  * Arguments
  *   message:        [Input]
  *                   string to put as the message
@@ -623,8 +609,7 @@ void tcp_client_add_message_sendqueue( char* message_ptr ) {
 }
 
 
-/*
- * Clear the outbound message queue of the client
+/* Clear the outbound message queue of the client
  * Arguments: None
  *
  * Return: None
@@ -636,8 +621,7 @@ void tcp_client_clear_message_sendqueue( void ) {
 
 
 /*************************** Message Ring Functions ***************************/
-/*
- * Initialize a tcp message ring
+/* Initialize a tcp message ring
  *
  * Arguments:
  *   ring_ptr: [Input/Output] pointer to a message ring that is type tcpmessagering_t
@@ -664,8 +648,7 @@ void tcp_ring_init( tcpmessagering_t *ring_ptr ) {
 }
 
 
-/*
- * Clear a message
+/* Clear a message
  *
  * Arguments:
  *   message_ptr: [Input/Output] pointer to a message that is type tcpmessage_t
@@ -679,8 +662,7 @@ void tcp_clear_message( tcpmessage_t *message_ptr ) {
 }
 
 
-/*
- * Increment the processing pointer in a message ring
+/* Increment the processing pointer in a message ring
  *
  * Arguments:
  *   ring_ptr: [Input/Output] pointer to a message ring that is type tcpmessagering_t
@@ -700,8 +682,7 @@ void tcp_increment_ring_ptr_processing( tcpmessagering_t *ring_ptr ) {
 }
 
 
-/*
- * Increment the new pointer in a message ring
+/* Increment the new pointer in a message ring
  *
  * Arguments:
  *   ring_ptr: [Input/Output] pointer to a message ring that is type tcpmessagering_t
@@ -731,8 +712,7 @@ void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr ) {
 }
 
 
-/*
- * Add one message to the message ring
+/* Add one message to the message ring
  *
  * Arguments
  *   ring_ptr:  [Input/Output]
@@ -764,8 +744,7 @@ void tcp_add_message( tcpmessagering_t *ring_ptr, char* message_ptr, char* sourc
 }
 
 
-/*
- * Process one message in the message ring
+/* Process one message in the message ring
  *
  * Arguments
  *   ring_ptr:            [Input]
@@ -799,7 +778,7 @@ void tcp_process_message( tcpmessagering_t *ring_ptr, void (*processing_func_ptr
 }
 
 
-/* This function clears a message ring
+/* Clear a message ring
  * Arguments
  *   ring_ptr:            [Input]
  *                        pointer to the ring to be cleared
