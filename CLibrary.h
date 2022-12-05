@@ -86,6 +86,7 @@ void tcp_client_cleanup( void );
 void tcp_client_process_message( void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) );
 int tcp_client_send_message( void );
 void tcp_client_add_message_sendqueue( char* message_ptr );
+void tcp_client_clear_message_sendqueue( void );
 
 
 #endif

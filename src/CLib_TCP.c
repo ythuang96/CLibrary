@@ -56,6 +56,7 @@ static void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr );
 static void tcp_add_message( tcpmessagering_t *ring_ptr, char* message_ptr, char* source_ip_ptr);
 static void tcp_process_message( tcpmessagering_t *ring_ptr, \
   void (*processing_func_ptr)(tcpmessage_t *), void (*emptyring_func_ptr)(void) );
+static void tcp_clear_ring( tcpmessagering_t *ring_ptr );
 
 
 
@@ -573,6 +574,10 @@ void tcp_client_process_message( void (*processing_func_ptr)(tcpmessage_t *), vo
  * This will ignore SIGPIPE, which is generated when there is a broken pipe when
  * using send (the receiving end disconnected)
  * This error should be handled using the return value of -1 of this function
+ *
+ * Note that this function does not clear the unsuccesfully sent message
+ * If clearing the ring is desired, call tcp_client_clear_message_sendqueue
+ * when dealing with the return value of -1 of this function
  */
 int tcp_client_send_message( void ) {
   int returnvalue;
@@ -614,6 +619,18 @@ int tcp_client_send_message( void ) {
  */
 void tcp_client_add_message_sendqueue( char* message_ptr ) {
   tcp_add_message( &client_message_out_ring_, message_ptr, server_ipaddr_ );
+  return;
+}
+
+
+/*
+ * Clear the outbound message queue of the client
+ * Arguments: None
+ *
+ * Return: None
+ */
+void tcp_client_clear_message_sendqueue( void ) {
+  tcp_clear_ring( &client_message_out_ring_ );
   return;
 }
 
@@ -778,5 +795,22 @@ void tcp_process_message( tcpmessagering_t *ring_ptr, void (*processing_func_ptr
     /* increment the proccessing pointer */
     tcp_increment_ring_ptr_processing( ring_ptr );
   }
+  return;
+}
+
+
+/* This function clears a message ring
+ * Arguments
+ *   ring_ptr:            [Input]
+ *                        pointer to the ring to be cleared
+ *
+ * Return: None
+ */
+void tcp_clear_ring( tcpmessagering_t *ring_ptr ) {
+  /* Set ptr_new to ptr_processing will clear the entire ring */
+  ring_ptr->ptr_new = ring_ptr->ptr_processing;
+  /* Each message does not need to be cleared individually as it will be cleared
+   * before new data is writen to it, see tcp_add_message */
+
   return;
 }
