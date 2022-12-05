@@ -59,6 +59,7 @@ static void tcp_process_message( tcpmessagering_t *ring_ptr, \
 
 
 
+/************************** Libarary Initialization **************************/
 /*
  * Initialize the libraray with all the settings needed
  * Arguments:
@@ -85,6 +86,7 @@ void tcp_lib_init(char* server_addr, int port, double update_freq ) {
 }
 
 
+/*************************** Server Side Functions ***************************/
 /*
  * Setup server side for TCP
  * Arguments:
@@ -404,8 +406,7 @@ void tcp_server_add_message_sendqueue( char* message_ptr, char* destination_ip_p
 }
 
 
-
-
+/*************************** Client Side Functions ***************************/
 /*
  * Setup client side for TCP
  * Arguments: None
@@ -617,8 +618,7 @@ void tcp_client_add_message_sendqueue( char* message_ptr ) {
 }
 
 
-
-
+/*************************** Message Ring Functions ***************************/
 /*
  * Initialize a tcp message ring
  *
