@@ -1,5 +1,13 @@
 #include "CLibrary.h"
-
+/************************************ Note ************************************/
+/*
+ * Note that code using this library should include the line
+ * signal(SIGPIPE, SIG_IGN);
+ * This will ignore SIGPIPE, which is generated when there is a broken pipe when
+ * using send (the receiving end disconnected)
+ * This error should be handled using the return value of
+ * tcp_client_send_message
+ */
 
 /************ Static Variables Available in and only in this file ************/
 /* IP setting for this TCP instance */
@@ -556,20 +564,41 @@ void tcp_client_process_message( void (*processing_func_ptr)(tcpmessage_t *), vo
 /*
  * Send all messages in the outbound message queue of the server
  * Arguments: None
- * Return   : None
+ * Return   : -1 if send failure due to broken pipe (server disconnected)
+ *            -2 if send failure due to other errors
+ *
+ * Note that code using this library should include the line
+ * signal(SIGPIPE, SIG_IGN);
+ * This will ignore SIGPIPE, which is generated when there is a broken pipe when
+ * using send (the receiving end disconnected)
+ * This error should be handled using the return value of -1 of this function
  */
-void tcp_client_send_message( void ) {
+int tcp_client_send_message( void ) {
+  int returnvalue;
+
   /* keep sending message as long as the ring is not empty */
   while ( client_message_out_ring_.ptr_processing != client_message_out_ring_.ptr_new ) {
     /* otherwise, send the message to the client */
-    send(client_socket_ , client_message_out_ring_.ptr_processing->message, TCPBUFFERSIZE, 0 );
-
-    /* clear the proccessed message */
-    tcp_clear_message( client_message_out_ring_.ptr_processing );
-    /* increment the proccessing pointer */
-    tcp_increment_ring_ptr_processing( &client_message_out_ring_ );
+    returnvalue = send(client_socket_ , client_message_out_ring_.ptr_processing->message, TCPBUFFERSIZE, 0 );
+    if (returnvalue != -1) { /* message successfully sent */
+      /* clear the proccessed message */
+      tcp_clear_message( client_message_out_ring_.ptr_processing );
+      /* increment the proccessing pointer */
+      tcp_increment_ring_ptr_processing( &client_message_out_ring_ );
+    }
+    else if (returnvalue == -1) { /* send failed */
+      /* if send failure due to broken pipe, meaning the server disconnected */
+      if (errno == EPIPE) {
+        return -1;
+      }
+      else {
+        print_time();
+        fprintf(error_log_, "Message sending failure due to unhandled error, errno code %i\n", errno);
+        return -2;
+      }
+    }
   }
-  return;
+  return 0;
 }
 
 
