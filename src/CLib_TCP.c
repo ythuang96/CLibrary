@@ -7,6 +7,9 @@
  * using send (the receiving end disconnected)
  * This error should be handled using the return value of
  * tcp_client_send_message
+ * Or is automatically handled by
+ * tcp_server_send_message
+ * by treating the respective client as disconnected
  */
 
 /************ Static Variables Available in and only in this file ************/
@@ -351,11 +354,28 @@ void tcp_server_process_message( void (*processing_func_ptr)(tcpmessage_t *), vo
 /* Send all messages in the outbound message queue of the server
  * Arguments: None
  * Return   : None
+ *
+ * Note:
+ * The message is always clear regardless whether send was sucessful or not
+ * Otherwise other messages in the queue behind will never get sent
+ *
+ * Note:
+ * The broken pipe error is automatically handeled by treating the client as
+ * disconnected, and the same disconnect procedure from tcp_server_monitor is
+ * applied.
+ * SIGPIPE should be suppressed with
+ * signal(SIGPIPE, SIG_IGN);
+ *
+ * Note:
+ * This function will write send failure to error log, but does not have a
+ * return value to notify send failure
  */
 void tcp_server_send_message( void ) {
   int array_position;
   /* temp socket descriptor */
   int sd;
+  /* send return value */
+  int returnval;
 
   /* keep sending message as long as the ring is not empty */
   while ( server_message_out_ring_.ptr_processing != server_message_out_ring_.ptr_new ) {
@@ -371,9 +391,39 @@ void tcp_server_send_message( void ) {
     }
     else{
       /* otherwise, send the message to the client */
-      send(sd , server_message_out_ring_.ptr_processing->message, TCPBUFFERSIZE, 0 );
-    }
+      returnval = send(sd , server_message_out_ring_.ptr_processing->message, TCPBUFFERSIZE, 0 );
 
+      /* If send failed */
+      if (returnval == -1) {
+        /* if send failure due to broken pipe, meaning the client disconnected */
+        if (errno == EPIPE) {
+          print_time();
+          fprintf(error_log_, "Broken pipe, client disconnected , IP %s\n" ,
+                server_message_out_ring_.ptr_processing->source_ip);
+          /* Print error message notifying */
+          print_time();
+          fprintf(error_log_, "Message sending failure, IP %s broken pipe, message is: %s\n", \
+                server_message_out_ring_.ptr_processing->source_ip, server_message_out_ring_.ptr_processing->message);
+
+          /* Remove the client socket from server_events_monitored_ptr_, and close the socket */
+          (server_events_monitored_ptr_ + array_position)->data.fd = -1;
+          epoll_ctl(server_epoll_fd_, EPOLL_CTL_DEL, sd, (server_events_monitored_ptr_ + array_position));
+          close( sd );
+
+          /* Decrement connected client counter */
+          connected_client_couter_ -= 1;
+        }
+        else {
+          print_time();
+          fprintf(error_log_, \
+              "Message sending failure due to unhandled error on ip %s, errno code %i\n", \
+              server_message_out_ring_.ptr_processing->source_ip ,errno);
+        } /* end if error is EPIPE */
+      } /* end if send failure */
+    } /* end if client is connected */
+
+    /* The message is always clear regardless whether send was sucessful or not
+     * Otherwise other messages in the queue behind will never get sent */
     /* clear the proccessed message */
     tcp_clear_message( server_message_out_ring_.ptr_processing );
     /* increment the proccessing pointer */
