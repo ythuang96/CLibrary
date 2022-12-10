@@ -42,6 +42,7 @@ int Joystick_Init( int device_num, int n_axis, int n_button_sl, int n_button_sh 
   if (SDL_NumJoysticks() == 0) {
     print_time();
     fprintf(error_log_, "No joystick found. Exiting.\n");
+    fflush(error_log_);
     return -1;
   }
 
@@ -58,6 +59,7 @@ int Joystick_Init( int device_num, int n_axis, int n_button_sl, int n_button_sh 
   else {
     print_time();
     fprintf(error_log_, "Could not open joystick %d.\n", device_num);
+    fflush(error_log_);
     return -1;
   }
 

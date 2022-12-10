@@ -118,6 +118,7 @@ int ADS1115_Init( int i2c_addr, double VRange, int DateRate ) {
     print_time();
     fprintf(error_log_, "I2C Initialization failed. Most likely you are not root\n");
     fprintf(error_log_, "Please remember to run as root.\n");
+    fflush(error_log_);
     return -1 ;
   }
   config = ADS1115_SingleEnded_Config( VRange, DateRate );
@@ -125,6 +126,7 @@ int ADS1115_Init( int i2c_addr, double VRange, int DateRate ) {
     printf("ADC configuration failed. Check configuration value.\n");
     print_time();
     fprintf(error_log_, "ADC configuration failed. Check configuration value.\n");
+    fflush(error_log_);
     return -1 ;
   }
   return 0;

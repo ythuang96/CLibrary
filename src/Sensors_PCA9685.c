@@ -74,6 +74,7 @@ int PCA9685_Init( int i2c_addr, double freq, bool totempole ) {
     print_time();
     fprintf(error_log_, "I2C Initialization failed. Most likely you are not root\n");
     fprintf(error_log_, "Please remember to run as root.\n");
+    fflush(error_log_);
     return -1 ;
   }
   PCA9685_setPWMFreq( freq );

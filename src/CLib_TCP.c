@@ -246,6 +246,7 @@ int tcp_server_monitor( void ) {
       print_time();
       fprintf(error_log_,"New connection , socket fd is %d , ip is : %s , port : %d\n" , \
         new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
+      fflush(error_log_);
 
       /* Add new socket to be monitors */
       array_position = last_ip_digit(inet_ntoa(address.sin_addr))-min_client_addr_+1;
@@ -276,6 +277,7 @@ int tcp_server_monitor( void ) {
         print_time();
         fprintf(error_log_, "Client disconnected , ip %s , port %d \n" ,
               inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
+        fflush(error_log_);
 
         /* Remove the client socket from server_events_monitored_ptr_, and close the socket */
         array_position = last_ip_digit(inet_ntoa(address.sin_addr))-min_client_addr_+1;
@@ -388,6 +390,7 @@ void tcp_server_send_message( void ) {
       print_time();
       fprintf(error_log_, "Message sending failure, IP Address: %s is not connected, message is: %s\n", \
         server_message_out_ring_.ptr_processing->source_ip, server_message_out_ring_.ptr_processing->message);
+      fflush(error_log_);
     }
     else{
       /* otherwise, send the message to the client */
@@ -404,6 +407,7 @@ void tcp_server_send_message( void ) {
           print_time();
           fprintf(error_log_, "Message sending failure, IP %s broken pipe, message is: %s\n", \
                 server_message_out_ring_.ptr_processing->source_ip, server_message_out_ring_.ptr_processing->message);
+          fflush(error_log_);
 
           /* Remove the client socket from server_events_monitored_ptr_, and close the socket */
           (server_events_monitored_ptr_ + array_position)->data.fd = -1;
@@ -418,6 +422,7 @@ void tcp_server_send_message( void ) {
           fprintf(error_log_, \
               "Message sending failure due to unhandled error on ip %s, errno code %i\n", \
               server_message_out_ring_.ptr_processing->source_ip ,errno);
+          fflush(error_log_);
         } /* end if error is EPIPE */
       } /* end if send failure */
     } /* end if client is connected */
@@ -496,6 +501,7 @@ int tcp_client_reconnect( void ) {
   else {
     print_time();
     fprintf(error_log_, "Connected to server!\n");
+    fflush(error_log_);
 
     /* Add server_socket_ to epoll monitor */
     client_events_monitored_.events = EPOLLIN; /* watch for input events */
@@ -544,6 +550,7 @@ int tcp_client_monitor( void ) {
       /* If valread is 0, then the server disconnected. */
       print_time();
       fprintf(error_log_, "Server disconnected.\n");
+      fflush(error_log_);
 
       /* Remove the client socket from client_events_monitored_, and do not close the socket */
       client_events_monitored_.data.fd = -1;
@@ -637,6 +644,7 @@ int tcp_client_send_message( void ) {
       else {
         print_time();
         fprintf(error_log_, "Message sending failure due to unhandled error, errno code %i\n", errno);
+        fflush(error_log_);
         return -2;
       }
     }
@@ -756,6 +764,7 @@ void tcp_increment_ring_ptr_new( tcpmessagering_t *ring_ptr ) {
   if (ring_ptr->ptr_new == ring_ptr->ptr_processing) {
     print_time();
     fprintf(error_log_, "Ring full, entire ring cleared, data lose occured!\n");
+    fflush(error_log_);
   }
 
   return;
